@@ -434,7 +434,7 @@ try {
 
 ## Support
 
-- Documentation: https://shov.com/docs
+- Documentation: https://shov.com/
 - GitHub: https://github.com/shovdev/shov-sdk
 - Issues: https://github.com/shovdev/shov-sdk/issues
 

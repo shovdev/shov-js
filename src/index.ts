@@ -3,7 +3,7 @@
  *
  * @version 1.0.0
  * @license MIT
- * @see https://shov.com/docs
+ * @see https://shov.com/
  */
 
 export interface ShovConfig {
