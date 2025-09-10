@@ -1,7 +1,7 @@
 /**
  * Shov SDK for JavaScript/TypeScript
  *
- * @version 1.0.0
+ * @version 1.1.0
  * @license MIT
  * @see https://shov.com/
  */
@@ -39,7 +39,7 @@ export class Shov {
     }
 
     this.config = {
-      baseUrl: 'https://shov-worker.domm-9cd.workers.dev',
+      baseUrl: 'https://shov.com',
       ...config,
     };
   }
@@ -80,19 +80,24 @@ export class Shov {
   }
 
   async addMany(collection: string, items: object[]): Promise<{ success: true; ids: string[] }> {
-    return this.request('addmany', { name: collection, items });
+    return this.request('addMany', { name: collection, items });
   }
 
-  async list(collection: string): Promise<{ items: ShovItem[] }> {
-    return this.request('list', { name: collection });
+  async where(collection: string, options?: { filter?: object; limit?: number; sort?: string }): Promise<{ items: ShovItem[] }> {
+    const body: any = { name: collection };
+    if (options?.filter) body.filter = options.filter;
+    if (options?.limit) body.limit = options.limit;
+    if (options?.sort) body.sort = options.sort;
+    return this.request('where', body);
   }
 
-  async find(collection: string, filter: object): Promise<{ items: ShovItem[] }> {
-    return this.request('find', { name: collection, filter });
-  }
-
-  async search(collection: string, query: string, topK: number = 5): Promise<{ items: ShovItem[] }> {
-    return this.request('search', { name: collection, query, topK });
+  async search(query: string, options?: { collection?: string; topK?: number; minScore?: number; orgWide?: boolean }): Promise<{ items: ShovItem[] }> {
+    const body: any = { query };
+    if (options?.collection) body.collection = options.collection;
+    if (options?.topK) body.topK = options.topK;
+    if (options?.minScore) body.minScore = options.minScore;
+    if (options?.orgWide) body.orgWide = options.orgWide;
+    return this.request('search', body);
   }
 
   // Item Operations
@@ -100,31 +105,69 @@ export class Shov {
     return this.request('update', { id, value });
   }
 
-  async delete(id: string): Promise<{ success: true }> {
-    return this.request('delete', { id });
+  async remove(id: string): Promise<{ success: true }> {
+    return this.request('remove', { id });
+  }
+
+  async forget(nameOrId: string): Promise<{ success: true }> {
+    return this.request('forget', { name: nameOrId });
   }
 
   // File Operations
-  async getUploadUrl(fileName: string, contentType: string): Promise<{ success: true; url: string; method: 'PUT'; id: string }> {
-    return this.request('upload-url', { fileName, contentType });
+  async getUploadUrl(fileName: string, mimeType?: string): Promise<{ uploadUrl: string; fileId: string }> {
+    const body: any = { fileName };
+    if (mimeType) body.mimeType = mimeType;
+    return this.request('upload-url', body);
   }
 
-  // Note: Direct file upload is not implemented in the SDK as it's best handled
-  // in a Node.js environment with fs access or directly from a browser with the pre-signed URL.
-  // We can add a Node-specific SDK later if needed.
+  async upload(file: File): Promise<{ success: true; id: string; url: string }> {
+    // Get upload URL first
+    const { uploadUrl, fileId } = await this.getUploadUrl(file.name, file.type);
+    
+    // Upload file to the generated URL
+    const uploadResponse = await fetch(uploadUrl, {
+      method: 'PUT',
+      body: file,
+      headers: {
+        'Content-Type': file.type,
+      },
+    });
 
-  // Auth Operations
+    if (!uploadResponse.ok) {
+      throw new ShovError('File upload failed', uploadResponse.status);
+    }
+
+    return {
+      success: true,
+      id: fileId,
+      url: uploadResponse.url || uploadUrl,
+    };
+  }
+
+  async deleteFile(fileId: string): Promise<{ success: true }> {
+    return this.request('files_delete', { id: fileId });
+  }
+
+  async listFiles(): Promise<{ files: Array<{ id: string; filename: string; mime_type: string; size: number; status: string; created_at: string; uploaded_at?: string }> }> {
+    return this.request('files_list', {});
+  }
+
+  async getContents(): Promise<{ contents: Array<{ id: string; name: string; type: string; value: any; created_at: string }> }> {
+    return this.request('contents', {});
+  }
+
+  // Project-scoped Auth Operations
   /**
-   * Sends a one-time password (OTP) to the given identifier (e.g., email).
+   * Sends a one-time password (OTP) to the given identifier (e.g., email) for this project.
    */
-  async sendOtp(identifier: string, digits: 4 | 6 = 6): Promise<{ success: true }> {
-    return this.request('send_otp', { identifier, digits });
+  async sendOtp(identifier: string): Promise<{ success: true; message: string }> {
+    return this.request('send_otp', { identifier });
   }
 
   /**
-   * Verifies a one-time password (OTP) for the given identifier.
+   * Verifies a one-time password (OTP) for the given identifier for this project.
    */
-  async verifyOtp(identifier: string, pin: string): Promise<{ success: true }> {
+  async verifyOtp(identifier: string, pin: string): Promise<{ success: boolean }> {
     return this.request('verify_otp', { identifier, pin });
   }
 }
