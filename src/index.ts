@@ -114,12 +114,18 @@ export class Shov {
   // We can add a Node-specific SDK later if needed.
 
   // Auth Operations
-  async issueOtp(identifier: string, digits: 4 | 6 = 6): Promise<{ success: true }> {
-    return this.request('otp_issue', { identifier, digits });
+  /**
+   * Sends a one-time password (OTP) to the given identifier (e.g., email).
+   */
+  async sendOtp(identifier: string, digits: 4 | 6 = 6): Promise<{ success: true }> {
+    return this.request('send_otp', { identifier, digits });
   }
 
+  /**
+   * Verifies a one-time password (OTP) for the given identifier.
+   */
   async verifyOtp(identifier: string, pin: string): Promise<{ success: true }> {
-    return this.request('otp_verify', { identifier, pin });
+    return this.request('verify_otp', { identifier, pin });
   }
 }
 
