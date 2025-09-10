@@ -29,7 +29,7 @@ console.log(value) // 'world'
 await shov.add('users', { name: 'Alice', age: 25 })
 await shov.add('users', { name: 'Bob', age: 30 })
 
-const users = await shov.list('users')
+const users = await shov.where('users')
 console.log(users) // Array of user objects
 ```
 
@@ -127,17 +127,20 @@ const recentUsers = await shov.list('users', {
 })
 ```
 
-#### `find(collection, options)`
+#### `where(collection, options)`
 Find items with filters.
 
 ```javascript
-const admins = await shov.find('users', {
+const admins = await shov.where('users', {
   filter: { role: 'admin' }
 })
 
-const youngUsers = await shov.find('users', {
+const youngUsers = await shov.where('users', {
   filter: { age: 25 }
 })
+
+// Get all items in a collection
+const allUsers = await shov.where('users')
 ```
 
 #### `update(id, value)`
@@ -150,11 +153,35 @@ await shov.update('item-id-123', {
 })
 ```
 
-#### `delete(id)`
+#### `remove(id)`
 Delete an item by ID.
 
 ```javascript
-await shov.delete('item-id-123')
+await shov.remove('item-id-123')
+```
+
+#### `addMany(collection, items)`
+Add multiple items to a collection at once.
+
+```javascript
+await shov.addMany('users', [
+  { name: 'Alice', role: 'admin' },
+  { name: 'Bob', role: 'user' },
+  { name: 'Charlie', role: 'user' }
+])
+```
+
+#### `search(query, options)`
+Perform vector search across your data.
+
+```javascript
+// Search within a specific collection
+const results = await shov.search('stringed instrument', { 
+  collection: 'products' 
+})
+
+// Search across all collections in project
+const allResults = await shov.search('musical equipment')
 ```
 
 ### Batch Operations
