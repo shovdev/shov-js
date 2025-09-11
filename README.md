@@ -5,13 +5,13 @@ JavaScript/TypeScript SDK for Shov - Instant edge key/value store.
 ## Installation
 
 ```bash
-npm install shov-sdk
+npm install shov-js
 ```
 
 ## Quick Start
 
 ```javascript
-import { Shov } from 'shov-sdk'
+import { Shov } from 'shov-js'
 
 const shov = new Shov({
   project: 'my-project',
@@ -38,7 +38,7 @@ console.log(users) // Array of user objects
 ### Basic Configuration
 
 ```javascript
-import { Shov } from 'shov-sdk'
+import { Shov } from 'shov-js'
 
 const shov = new Shov({
   project: 'my-project',        // Required: Your project name
@@ -261,7 +261,7 @@ console.log(stats)
 The SDK throws `ShovError` for API errors:
 
 ```javascript
-import { Shov, ShovError } from 'shov-sdk'
+import { Shov, ShovError } from 'shov-js'
 
 try {
   await shov.get('nonexistent-key')
@@ -278,7 +278,7 @@ try {
 The SDK is written in TypeScript and includes full type definitions:
 
 ```typescript
-import { Shov, ShovItem, ShovConfig } from 'shov-sdk'
+import { Shov, ShovItem, ShovConfig } from 'shov-js'
 
 const config: ShovConfig = {
   project: 'my-project',
@@ -298,7 +298,7 @@ const users: ShovItem[] = await shov.list('users')
 
 ```javascript
 // lib/shov.js
-import { Shov } from 'shov-sdk'
+import { Shov } from 'shov-js'
 
 export const shov = new Shov({
   project: process.env.SHOV_PROJECT,
@@ -363,7 +363,7 @@ function UserList() {
 
 ```javascript
 import express from 'express'
-import { Shov } from 'shov-sdk'
+import { Shov } from 'shov-js'
 
 const app = express()
 const shov = new Shov({
@@ -462,8 +462,8 @@ try {
 ## Support
 
 - Documentation: https://shov.com/
-- GitHub: https://github.com/shovdev/shov-sdk
-- Issues: https://github.com/shovdev/shov-sdk/issues
+- GitHub: https://github.com/shovdev/shov-js
+- Issues: https://github.com/shovdev/shov-js/issues
 
 ## License
 
