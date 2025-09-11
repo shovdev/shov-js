@@ -1,4 +1,4 @@
-# Shov SDK
+# Shov JavaScript SDK
 
 JavaScript/TypeScript SDK for Shov - Instant edge key/value store.
 

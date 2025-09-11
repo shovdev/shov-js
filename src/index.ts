@@ -1,7 +1,7 @@
 /**
- * Shov SDK for JavaScript/TypeScript
+ * Shov JavaScript SDK
  *
- * @version 1.1.0
+ * @version 1.0.0
  * @license MIT
  * @see https://shov.com/
  */
@@ -44,11 +44,11 @@ export class Shov {
     };
   }
 
-  private async request<T>(command: string, body: object): Promise<T> {
+  private async request<T>(command: string, body: object, method: string = 'POST'): Promise<T> {
     const url = `${this.config.baseUrl}/api/${command}/${this.config.projectName}`;
 
     const response = await fetch(url, {
-      method: 'POST',
+      method,
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${this.config.apiKey}`,
@@ -80,7 +80,7 @@ export class Shov {
   }
 
   async addMany(collection: string, items: object[]): Promise<{ success: true; ids: string[] }> {
-    return this.request('addMany', { name: collection, items });
+    return this.request('add-many', { name: collection, items });
   }
 
   async where(collection: string, options?: { filter?: object; limit?: number; sort?: string }): Promise<{ items: ShovItem[] }> {
@@ -100,17 +100,21 @@ export class Shov {
     return this.request('search', body);
   }
 
-  // Item Operations
-  async update(id: string, value: object): Promise<{ success: true }> {
-    return this.request('update', { id, value });
+  // Item Operations (require collection scoping)
+  async update(collection: string, id: string, value: object): Promise<{ success: true }> {
+    return this.request(`update/${id}`, { collection, value });
   }
 
-  async remove(id: string): Promise<{ success: true }> {
-    return this.request('remove', { id });
+  async remove(collection: string, id: string): Promise<{ success: true }> {
+    return this.request(`remove/${id}`, { collection });
   }
 
-  async forget(nameOrId: string): Promise<{ success: true }> {
-    return this.request('forget', { name: nameOrId });
+  async forget(key: string): Promise<{ success: true }> {
+    return this.request(`forget/${key}`, {}, 'DELETE');
+  }
+
+  async forgetFile(filename: string): Promise<{ success: true; count: number }> {
+    return this.request(`forget-file/${filename}`, {}, 'DELETE');
   }
 
   // File Operations
@@ -145,11 +149,11 @@ export class Shov {
   }
 
   async deleteFile(fileId: string): Promise<{ success: true }> {
-    return this.request('files_delete', { id: fileId });
+    return this.request(`files-delete/${fileId}`, {}, 'DELETE');
   }
 
   async listFiles(): Promise<{ files: Array<{ id: string; filename: string; mime_type: string; size: number; status: string; created_at: string; uploaded_at?: string }> }> {
-    return this.request('files_list', {});
+    return this.request('files-list', {});
   }
 
   async getContents(): Promise<{ contents: Array<{ id: string; name: string; type: string; value: any; created_at: string }> }> {
@@ -161,14 +165,14 @@ export class Shov {
    * Sends a one-time password (OTP) to the given identifier (e.g., email) for this project.
    */
   async sendOtp(identifier: string): Promise<{ success: true; message: string }> {
-    return this.request('send_otp', { identifier });
+    return this.request('send-otp', { identifier });
   }
 
   /**
    * Verifies a one-time password (OTP) for the given identifier for this project.
    */
   async verifyOtp(identifier: string, pin: string): Promise<{ success: boolean }> {
-    return this.request('verify_otp', { identifier, pin });
+    return this.request('verify-otp', { identifier, pin });
   }
 }
 
