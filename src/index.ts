@@ -91,12 +91,13 @@ export class Shov {
     return this.request('where', body);
   }
 
-  async search(query: string, options?: { collection?: string; topK?: number; minScore?: number; orgWide?: boolean }): Promise<{ items: ShovItem[] }> {
+  async search(query: string, options?: { collection?: string; topK?: number; minScore?: number; orgWide?: boolean; filters?: Record<string, any> }): Promise<{ items: ShovItem[] }> {
     const body: any = { query };
     if (options?.collection) body.collection = options.collection;
     if (options?.topK) body.topK = options.topK;
     if (options?.minScore) body.minScore = options.minScore;
     if (options?.orgWide) body.orgWide = options.orgWide;
+    if (options?.filters) body.filters = options.filters;
     return this.request('search', body);
   }
 
