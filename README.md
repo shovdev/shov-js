@@ -188,8 +188,39 @@ const results = await shov.search('stringed instrument', {
   collection: 'products' 
 })
 
+// Search with filters and options
+const filteredResults = await shov.search('electronics', {
+  collection: 'products',
+  filters: { category: 'guitar', price: { $lt: 1000 } },
+  topK: 5,
+  minScore: 0.7
+})
+
 // Search across all collections in project
 const allResults = await shov.search('musical equipment')
+```
+
+**⚠️ Important**: Vector search has eventual consistency. There is a small delay between adding data (`add`, `set`) and it becoming searchable. Plan your application logic to account for this indexing lag.
+
+```javascript
+// Example: Handle eventual consistency
+const newItem = await shov.add('products', { name: 'New Guitar', type: 'Electric' })
+
+// ❌ This may not find the new item immediately
+const results = await shov.search('New Guitar') // May return empty
+
+// ✅ Better: Use direct queries for immediate access
+const item = await shov.getItem(newItem.id) // Always works immediately
+
+// ✅ Or implement retry logic for search
+async function searchWithRetry(query, maxRetries = 3) {
+  for (let i = 0; i < maxRetries; i++) {
+    const results = await shov.search(query)
+    if (results.length > 0) return results
+    await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1s
+  }
+  return []
+}
 ```
 
 ### Batch Operations
