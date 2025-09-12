@@ -45,7 +45,19 @@ export class Shov {
   }
 
   private async request<T>(command: string, body: object, method: string = 'POST'): Promise<T> {
-    const url = `${this.config.baseUrl}/api/${command}/${this.config.projectName}`;
+    // Handle commands that include path parameters (like forget/key or remove/id)
+    const commandParts = command.split('/');
+    const baseCommand = commandParts[0];
+    const pathParam = commandParts[1];
+    
+    let url;
+    if (pathParam) {
+      // For commands like forget/key or remove/id, the URL should be /api/command/project/param
+      url = `${this.config.baseUrl}/api/${baseCommand}/${this.config.projectName}/${pathParam}`;
+    } else {
+      // For regular commands, the URL is /api/command/project
+      url = `${this.config.baseUrl}/api/${command}/${this.config.projectName}`;
+    }
 
     const response = await fetch(url, {
       method,
@@ -119,7 +131,7 @@ export class Shov {
   }
 
   // File Operations
-  async getUploadUrl(fileName: string, mimeType?: string): Promise<{ uploadUrl: string; fileId: string }> {
+  async getUploadUrl(fileName: string, mimeType?: string): Promise<{ uploadUrl: string; fileId: string; publicUrl?: string }> {
     const body: any = { fileName };
     if (mimeType) body.mimeType = mimeType;
     return this.request('upload-url', body);
@@ -127,7 +139,8 @@ export class Shov {
 
   async upload(file: File): Promise<{ success: true; id: string; url: string }> {
     // Get upload URL first
-    const { uploadUrl, fileId } = await this.getUploadUrl(file.name, file.type);
+    const uploadUrlResponse = await this.getUploadUrl(file.name, file.type);
+    const { uploadUrl, fileId, publicUrl } = uploadUrlResponse;
     
     // Upload file to the generated URL
     const uploadResponse = await fetch(uploadUrl, {
@@ -139,23 +152,17 @@ export class Shov {
     });
 
     if (!uploadResponse.ok) {
-      throw new ShovError('File upload failed', uploadResponse.status);
+      const errorText = await uploadResponse.text().catch(() => 'Unknown error');
+      throw new ShovError(`File upload failed: ${errorText}`, uploadResponse.status);
     }
 
     return {
       success: true,
       id: fileId,
-      url: uploadResponse.url || uploadUrl,
+      url: publicUrl || uploadResponse.url || uploadUrl,
     };
   }
 
-  async deleteFile(fileId: string): Promise<{ success: true }> {
-    return this.request(`files-delete/${fileId}`, {}, 'DELETE');
-  }
-
-  async listFiles(): Promise<{ files: Array<{ id: string; filename: string; mime_type: string; size: number; status: string; created_at: string; uploaded_at?: string }> }> {
-    return this.request('files-list', {});
-  }
 
   async getContents(): Promise<{ contents: Array<{ id: string; name: string; type: string; value: any; created_at: string }> }> {
     return this.request('contents', {});
