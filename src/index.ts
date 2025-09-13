@@ -122,6 +122,10 @@ export class Shov {
     return this.request(`remove/${id}`, { collection });
   }
 
+  async clear(collection: string): Promise<{ success: true; count: number }> {
+    return this.request('clear', { name: collection });
+  }
+
   async forget(key: string): Promise<{ success: true }> {
     return this.request(`forget/${key}`, {}, 'DELETE');
   }

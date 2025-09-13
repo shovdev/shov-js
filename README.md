@@ -22,7 +22,7 @@ npm install shov-js
 import { Shov } from 'shov-js'
 
 const shov = new Shov({
-  project: 'my-project',
+  projectName: 'my-project',
   apiKey: 'shov_live_...'
 })
 
@@ -49,7 +49,7 @@ console.log(users) // Array of user objects
 import { Shov } from 'shov-js'
 
 const shov = new Shov({
-  project: 'my-project',        // Required: Your project name
+  projectName: 'my-project',    // Required: Your project name
   apiKey: 'shov_live_...',      // Required: Your API key
   baseUrl: 'https://shov.com'   // Optional: Custom base URL
 })
@@ -59,7 +59,7 @@ const shov = new Shov({
 
 ```javascript
 const shov = new Shov({
-  project: process.env.SHOV_PROJECT,
+  projectName: process.env.SHOV_PROJECT,
   apiKey: process.env.SHOV_API_KEY
 })
 ```
@@ -84,27 +84,11 @@ const count = await shov.get('user_count')
 const config = await shov.get('config')
 ```
 
-#### `getItem(key)`
-Get full item data including metadata.
+#### `forget(key)`
+Delete a key-value pair.
 
 ```javascript
-const item = await shov.getItem('user_count')
-console.log(item)
-// {
-//   id: '...',
-//   name: 'user_count',
-//   value: 42,
-//   created_at: '2024-01-01T00:00:00Z',
-//   updated_at: '2024-01-01T00:00:00Z'
-// }
-```
-
-#### `exists(key)`
-Check if a key exists.
-
-```javascript
-const exists = await shov.exists('user_count')
-console.log(exists) // true or false
+await shov.forget('old-config')
 ```
 
 ### Collection Operations
@@ -121,18 +105,15 @@ const result = await shov.add('users', {
 console.log(result.id) // Item ID
 ```
 
-#### `list(collection, options?)`
-List items in a collection.
+#### `addMany(collection, items)`
+Add multiple items to a collection at once.
 
 ```javascript
-// List all items
-const users = await shov.list('users')
-
-// With options
-const recentUsers = await shov.list('users', {
-  limit: 10,
-  sort: 'desc'
-})
+await shov.addMany('users', [
+  { name: 'Alice', role: 'admin' },
+  { name: 'Bob', role: 'user' },
+  { name: 'Charlie', role: 'user' }
+])
 ```
 
 #### `where(collection, options)`
@@ -151,32 +132,29 @@ const youngUsers = await shov.where('users', {
 const allUsers = await shov.where('users')
 ```
 
-#### `update(id, value)`
-Update an item by ID.
+#### `update(collection, id, value)`
+Update an item by collection and ID.
 
 ```javascript
-await shov.update('item-id-123', {
+await shov.update('users', 'item-id-123', {
   name: 'Alice Smith',
   age: 26
 })
 ```
 
-#### `remove(id)`
-Delete an item by ID.
+#### `remove(collection, id)`
+Delete an item by collection and ID.
 
 ```javascript
-await shov.remove('item-id-123')
+await shov.remove('users', 'item-id-123')
 ```
 
-#### `addMany(collection, items)`
-Add multiple items to a collection at once.
+#### `clear(collection)`
+Clear all items from a collection.
 
 ```javascript
-await shov.addMany('users', [
-  { name: 'Alice', role: 'admin' },
-  { name: 'Bob', role: 'user' },
-  { name: 'Charlie', role: 'user' }
-])
+const result = await shov.clear('temp-data')
+console.log(`Cleared ${result.count} items`)
 ```
 
 #### `search(query, options)`
@@ -223,76 +201,68 @@ async function searchWithRetry(query, maxRetries = 3) {
 }
 ```
 
-### Batch Operations
+### File Operations
 
-#### `getMany(keys)`
-Get multiple values at once.
+#### `upload(file)`
+Upload a file directly.
 
 ```javascript
-const values = await shov.getMany(['key1', 'key2', 'key3'])
-console.log(values)
-// { key1: 'value1', key2: 'value2', key3: null }
+// Upload a file from file input
+const fileInput = document.querySelector('input[type="file"]')
+const file = fileInput.files[0]
+const result = await shov.upload(file)
+console.log(result.url) // File URL
 ```
 
-#### `setMany(data)`
-Set multiple key-value pairs at once.
+#### `getUploadUrl(fileName, mimeType?)`
+Get a pre-signed URL for client-side file uploads.
 
 ```javascript
-const results = await shov.setMany({
-  key1: 'value1',
-  key2: 'value2',
-  key3: 'value3'
+const { uploadUrl, fileId } = await shov.getUploadUrl('document.pdf', 'application/pdf')
+
+// Use the upload URL for client-side upload
+const file = document.querySelector('input[type="file"]').files[0]
+await fetch(uploadUrl, {
+  method: 'PUT',
+  body: file,
+  headers: { 'Content-Type': file.type }
 })
-console.log(results)
-// { key1: 'id1', key2: 'id2', key3: 'id3' }
+```
+
+#### `forgetFile(filename)`
+Delete a file.
+
+```javascript
+await shov.forgetFile('old-document.pdf')
+```
+
+### Authentication Operations
+
+#### `sendOtp(identifier)`
+Send a one-time password to an identifier.
+
+```javascript
+await shov.sendOtp('user@example.com')
+```
+
+#### `verifyOtp(identifier, pin)`
+Verify a one-time password.
+
+```javascript
+const result = await shov.verifyOtp('user@example.com', '1234')
+if (result.success) {
+  console.log('PIN verified successfully')
+}
 ```
 
 ### Utility Operations
 
-#### `increment(key, amount?)`
-Increment a numeric value.
+#### `getContents()`
+List all items in the project.
 
 ```javascript
-await shov.set('counter', 5)
-const newValue = await shov.increment('counter', 3)
-console.log(newValue) // 8
-
-// Default increment by 1
-await shov.increment('views')
-```
-
-#### `decrement(key, amount?)`
-Decrement a numeric value.
-
-```javascript
-const newValue = await shov.decrement('counter', 2)
-console.log(newValue) // 6
-```
-
-#### `append(key, value)`
-Append to an array value.
-
-```javascript
-await shov.set('tags', ['javascript', 'web'])
-const newTags = await shov.append('tags', 'nodejs')
-console.log(newTags) // ['javascript', 'web', 'nodejs']
-```
-
-#### `remove(key, value)`
-Remove from an array value.
-
-```javascript
-const newTags = await shov.remove('tags', 'web')
-console.log(newTags) // ['javascript', 'nodejs']
-```
-
-#### `stats(collection)`
-Get collection statistics.
-
-```javascript
-const stats = await shov.stats('users')
-console.log(stats)
-// { count: 150, size: 45230 }
+const contents = await shov.getContents()
+console.log(contents.contents) // Array of all items
 ```
 
 ## Error Handling
@@ -320,15 +290,15 @@ The SDK is written in TypeScript and includes full type definitions:
 import { Shov, ShovItem, ShovConfig } from 'shov-js'
 
 const config: ShovConfig = {
-  project: 'my-project',
-  apiKey: 'sk_live_...'
+  projectName: 'my-project',
+  apiKey: 'shov_live_...'
 }
 
 const shov = new Shov(config)
 
 // Typed responses
-const item: ShovItem = await shov.getItem('my-key')
-const users: ShovItem[] = await shov.list('users')
+const value = await shov.get('my-key')
+const users = await shov.where('users')
 ```
 
 ## Framework Integration
@@ -340,7 +310,7 @@ const users: ShovItem[] = await shov.list('users')
 import { Shov } from 'shov-js'
 
 export const shov = new Shov({
-  project: process.env.SHOV_PROJECT,
+  projectName: process.env.SHOV_PROJECT,
   apiKey: process.env.SHOV_API_KEY
 })
 
@@ -353,7 +323,7 @@ export default async function handler(req, res) {
       const user = await shov.add('users', req.body)
       res.json(user)
     } else {
-      const users = await shov.list('users')
+      const users = await shov.where('users')
       res.json(users)
     }
   } catch (error) {
@@ -375,7 +345,7 @@ function UserList() {
   useEffect(() => {
     async function loadUsers() {
       try {
-        const data = await shov.list('users')
+        const data = await shov.where('users')
         setUsers(data)
       } catch (error) {
         console.error('Failed to load users:', error)
@@ -406,7 +376,7 @@ import { Shov } from 'shov-js'
 
 const app = express()
 const shov = new Shov({
-  project: process.env.SHOV_PROJECT,
+  projectName: process.env.SHOV_PROJECT,
   apiKey: process.env.SHOV_API_KEY
 })
 
@@ -414,7 +384,7 @@ app.use(express.json())
 
 app.get('/api/users', async (req, res) => {
   try {
-    const users = await shov.list('users')
+    const users = await shov.where('users')
     res.json(users)
   } catch (error) {
     res.status(500).json({ error: error.message })
@@ -439,13 +409,13 @@ Always use environment variables for sensitive data:
 ```javascript
 // ✅ Good
 const shov = new Shov({
-  project: process.env.SHOV_PROJECT,
+  projectName: process.env.SHOV_PROJECT,
   apiKey: process.env.SHOV_API_KEY
 })
 
 // ❌ Bad
 const shov = new Shov({
-  project: 'my-project',
+  projectName: 'my-project',
   apiKey: 'shov_live_hardcoded_key'
 })
 ```

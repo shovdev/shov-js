@@ -1,0 +1,82 @@
+name: Publish to NPM
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    if: github.repository == 'shovdev/shov-js'
+    permissions:
+      contents: write
+      packages: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          registry-url: 'https://registry.npmjs.org/'
+
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Build package
+        run: npm run build
+
+      - name: Run tests (if available)
+        run: npm test --if-present
+
+      - name: Check if version changed
+        id: version-check
+        run: |
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          
+          # Check if this version exists on NPM
+          if npm view shov-js@$CURRENT_VERSION version 2>/dev/null; then
+            echo "version_exists=true" >> $GITHUB_OUTPUT
+            echo "Version $CURRENT_VERSION already exists on NPM"
+          else
+            echo "version_exists=false" >> $GITHUB_OUTPUT
+            echo "Version $CURRENT_VERSION is new, will publish"
+          fi
+
+      - name: Publish to NPM
+        if: steps.version-check.outputs.version_exists == 'false'
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release
+        if: steps.version-check.outputs.version_exists == 'false' && github.event_name == 'push'
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ steps.version-check.outputs.current_version }}
+          release_name: shov-js v${{ steps.version-check.outputs.current_version }}
+          body: |
+            ## shov-js v${{ steps.version-check.outputs.current_version }}
+            
+            Auto-published to NPM from commit ${{ github.sha }}
+            
+            ### Installation
+            ```bash
+            npm install shov-js@${{ steps.version-check.outputs.current_version }}
+            ```
+          draft: false
+          prerelease: false
