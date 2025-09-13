@@ -188,7 +188,7 @@ const newItem = await shov.add('products', { name: 'New Guitar', type: 'Electric
 const results = await shov.search('New Guitar') // May return empty
 
 // ✅ Better: Use direct queries for immediate access
-const item = await shov.getItem(newItem.id) // Always works immediately
+const items = await shov.where('products', { filter: { id: newItem.id } }) // Always works immediately
 
 // ✅ Or implement retry logic for search
 async function searchWithRetry(query, maxRetries = 3) {
@@ -257,11 +257,11 @@ if (result.success) {
 
 ### Utility Operations
 
-#### `getContents()`
+#### `contents()`
 List all items in the project.
 
 ```javascript
-const contents = await shov.getContents()
+const contents = await shov.contents()
 console.log(contents.contents) // Array of all items
 ```
 
@@ -425,7 +425,7 @@ Always handle errors appropriately:
 
 ```javascript
 try {
-  const users = await shov.list('users')
+  const users = await shov.where('users')
   return users
 } catch (error) {
   console.error('Failed to fetch users:', error)
@@ -437,8 +437,12 @@ try {
 Use batch operations for better performance:
 
 ```javascript
-// ✅ Good - batch operation
-const values = await shov.getMany(['key1', 'key2', 'key3'])
+// ✅ Good - batch operation using Promise.all
+const values = await Promise.all([
+  shov.get('key1'),
+  shov.get('key2'), 
+  shov.get('key3')
+])
 
 // ❌ Bad - sequential operations
 const value1 = await shov.get('key1')
