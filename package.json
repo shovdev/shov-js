@@ -1,7 +1,7 @@
 {
   "name": "shov-js",
   "version": "1.1.0",
-  "description": "JavaScript SDK for Shov - The AI Memory Engine",
+  "description": "JavaScript SDK for Shov - The AI-Native Database",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
