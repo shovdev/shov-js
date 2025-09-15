@@ -1,6 +1,6 @@
 {
   "name": "shov-js",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "JavaScript SDK for Shov - AI-native database with vector search and real-time streaming",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
