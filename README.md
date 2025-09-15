@@ -1,6 +1,6 @@
 # Shov JavaScript SDK
 
-JavaScript/TypeScript SDK for Shov - Instant edge key/value store.
+JavaScript/TypeScript SDK for Shov - AI-native database with vector search and real-time streaming.
 
 <p align="center">
   <a href="https://shov.com" target="_blank"><strong>Website / Docs</strong></a> •
@@ -39,6 +39,17 @@ await shov.add('users', { name: 'Bob', age: 30 })
 
 const users = await shov.where('users')
 console.log(users) // Array of user objects
+
+// Vector search
+const results = await shov.search('find Alice', { collection: 'users' })
+
+// Real-time streaming
+const { eventSource, close } = await shov.subscribe([
+  { collection: 'users' },
+  { channel: 'notifications' }
+], {
+  onMessage: (data) => console.log('Update:', data)
+})
 ```
 
 ## Configuration
@@ -265,6 +276,81 @@ const contents = await shov.contents()
 console.log(contents.contents) // Array of all items
 ```
 
+### Real-time Streaming Operations
+
+#### `createToken(type, subscriptions, options?)`
+Create a temporary token for client-side operations.
+
+```javascript
+// Create a streaming token for browser-side connections
+const token = await shov.createToken('streaming', [
+  { collection: 'users', filters: { status: 'active' } },
+  { key: 'config' },
+  { channel: 'notifications' }
+], { expires_in: 3600 })
+
+console.log(token.token) // Use this token for streaming
+```
+
+#### `subscribe(subscriptions, options?)`
+Subscribe to real-time updates using Server-Sent Events.
+
+```javascript
+// Subscribe to multiple data sources
+const { eventSource, close } = await shov.subscribe([
+  { collection: 'users' },                    // All user changes
+  { collection: 'orders', filters: { status: 'pending' } }, // Filtered orders
+  { key: 'config' },                          // Config key changes
+  { channel: 'notifications' }                // Custom channel messages
+], {
+  onMessage: (data) => {
+    if (data.type === 'message') {
+      console.log('Data update:', data.data)
+    }
+  },
+  onError: (error) => {
+    console.error('Stream error:', error)
+  },
+  onOpen: () => {
+    console.log('Connected to real-time stream')
+  },
+  expires_in: 7200  // Token expiration (default: 3600)
+})
+
+// Close the connection when done
+// close()
+```
+
+#### `broadcast(subscription, message)`
+Broadcast a message to active subscribers.
+
+```javascript
+// Broadcast to collection subscribers
+await shov.broadcast(
+  { collection: 'users', filters: { role: 'admin' } },
+  { type: 'alert', text: 'System maintenance in 5 minutes' }
+)
+
+// Broadcast to key subscribers
+await shov.broadcast(
+  { key: 'config' },
+  { theme: 'dark', updated_at: new Date().toISOString() }
+)
+
+// Broadcast to channel subscribers
+await shov.broadcast(
+  { channel: 'notifications' },
+  { user: 'Alice', message: 'Hello everyone!' }
+)
+```
+
+**Real-time Features:**
+- **Auto-broadcasts**: All data writes (`set`, `add`, `update`, `remove`) automatically notify subscribers
+- **Filtered subscriptions**: Only receive updates matching your criteria
+- **Multiple subscription types**: Collections, keys, and custom channels
+- **Secure tokens**: Temporary, scoped authentication for browser-side connections
+- **Connection management**: Automatic reconnection and heartbeat handling
+
 ## Error Handling
 
 The SDK throws `ShovError` for API errors:
@@ -364,6 +450,74 @@ function UserList() {
         <li key={user.id}>{user.value.name}</li>
       ))}
     </ul>
+  )
+}
+
+// Real-time React component with streaming
+function LiveUserList() {
+  const [users, setUsers] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cleanup
+
+    async function setupRealtime() {
+      try {
+        // Load initial data
+        const initialUsers = await shov.where('users')
+        setUsers(initialUsers)
+        setLoading(false)
+
+        // Subscribe to real-time updates
+        const { close } = await shov.subscribe([
+          { collection: 'users' }
+        ], {
+          onMessage: (data) => {
+            if (data.type === 'message' && data.data.collection === 'users') {
+              // Update users list based on the operation
+              if (data.data.operation === 'add') {
+                setUsers(prev => [...prev, { 
+                  id: data.data.key, 
+                  value: data.data.newValue 
+                }])
+              } else if (data.data.operation === 'remove') {
+                setUsers(prev => prev.filter(u => u.id !== data.data.key))
+              } else if (data.data.operation === 'update') {
+                setUsers(prev => prev.map(u => 
+                  u.id === data.data.key 
+                    ? { ...u, value: data.data.newValue }
+                    : u
+                ))
+              }
+            }
+          }
+        })
+
+        cleanup = close
+      } catch (error) {
+        console.error('Failed to setup real-time:', error)
+        setLoading(false)
+      }
+    }
+
+    setupRealtime()
+
+    return () => {
+      cleanup?.()
+    }
+  }, [])
+
+  if (loading) return <div>Loading...</div>
+
+  return (
+    <div>
+      <h2>Live Users ({users.length})</h2>
+      <ul>
+        {users.map(user => (
+          <li key={user.id}>{user.value.name}</li>
+        ))}
+      </ul>
+    </div>
   )
 }
 ```

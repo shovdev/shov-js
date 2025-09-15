@@ -229,6 +229,86 @@ export class Shov {
   async verifyOtp(identifier: string, pin: string): Promise<{ success: boolean }> {
     return this.request('verify-otp', { identifier, pin });
   }
+
+  // Real-time Streaming Operations
+  /**
+   * Broadcast a message to subscribers of a specific subscription.
+   */
+  async broadcast(
+    subscription: {
+      collection?: string;
+      key?: string;
+      channel?: string;
+      filters?: Record<string, any>;
+    },
+    message: any
+  ): Promise<{
+    success: true;
+    messageId: string;
+    delivered: number;
+  }> {
+    return this.request('broadcast', { subscription, message });
+  }
+
+  /**
+   * Subscribe to real-time updates using Server-Sent Events (SSE).
+   * Returns an EventSource instance for handling the stream.
+   */
+  async subscribe(
+    subscriptions: Array<{
+      collection?: string;
+      key?: string;
+      channel?: string;
+      filters?: Record<string, any>;
+    }>,
+    options?: { 
+      expires_in?: number;
+      onMessage?: (data: any) => void;
+      onError?: (error: any) => void;
+      onOpen?: () => void;
+    }
+  ): Promise<{
+    eventSource: EventSource;
+    token: string;
+    close: () => void;
+  }> {
+    // First create a streaming token
+    const tokenResponse = await this.createToken('streaming', subscriptions, {
+      expires_in: options?.expires_in
+    });
+
+    // Create EventSource connection
+    const subscriptionsParam = encodeURIComponent(JSON.stringify(subscriptions));
+    const url = `${this.baseUrl}/subscribe/${this.projectName}?token=${tokenResponse.token}&subscriptions=${subscriptionsParam}`;
+    
+    const eventSource = new EventSource(url);
+
+    // Set up event handlers
+    eventSource.onopen = () => {
+      options?.onOpen?.();
+    };
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        options?.onMessage?.(data);
+      } catch (error) {
+        options?.onError?.(error);
+      }
+    };
+
+    eventSource.onerror = (error) => {
+      options?.onError?.(error);
+    };
+
+    return {
+      eventSource,
+      token: tokenResponse.token,
+      close: () => {
+        eventSource.close();
+      }
+    };
+  }
 }
 
 export function createShov(config: ShovConfig): Shov {
