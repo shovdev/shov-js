@@ -206,7 +206,7 @@ export class Shov {
     token: string;
     expires_in: number;
     expires_at: string;
-    subscriptions: number;
+    subscriptions?: number;
   }> {
     return this.createToken('streaming', subscriptions, options);
   }
@@ -279,7 +279,7 @@ export class Shov {
 
     // Create EventSource connection
     const subscriptionsParam = encodeURIComponent(JSON.stringify(subscriptions));
-    const url = `${this.baseUrl}/subscribe/${this.projectName}?token=${tokenResponse.token}&subscriptions=${subscriptionsParam}`;
+    const url = `${this.config.baseUrl}/api/subscribe/${this.config.projectName}?token=${tokenResponse.token}&subscriptions=${subscriptionsParam}`;
     
     const eventSource = new EventSource(url);
 
