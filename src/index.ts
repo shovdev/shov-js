@@ -167,6 +167,49 @@ export class Shov {
     };
   }
 
+  // Token Operations
+  async createToken(
+    type: string,
+    data: any,
+    options?: { expires_in?: number }
+  ): Promise<{
+    success: true;
+    token: string;
+    expires_in: number;
+    expires_at: string;
+    subscriptions?: number;
+  }> {
+    const body: any = { type };
+    
+    // Handle different token types
+    if (type === 'streaming') {
+      body.subscriptions = data;
+    } else {
+      body.data = data;
+    }
+    
+    if (options?.expires_in) body.expires_in = options.expires_in;
+    return this.request('token', body);
+  }
+
+  // Legacy method for backward compatibility
+  async createStreamToken(
+    subscriptions: Array<{
+      collection?: string;
+      key?: string;
+      channel?: string;
+      filters?: Record<string, any>;
+    }>,
+    options?: { expires_in?: number }
+  ): Promise<{
+    success: true;
+    token: string;
+    expires_in: number;
+    expires_at: string;
+    subscriptions: number;
+  }> {
+    return this.createToken('streaming', subscriptions, options);
+  }
 
   async getContents(): Promise<{ contents: Array<{ id: string; name: string; type: string; value: any; created_at: string }> }> {
     return this.request('contents', {});
