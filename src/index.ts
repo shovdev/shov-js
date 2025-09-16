@@ -123,6 +123,12 @@ export class Shov {
     return this.request('where', body);
   }
 
+  async count(collection: string, options?: { filter?: Filters }): Promise<{ success: true; count: number; collection: string }> {
+    const body: any = { name: collection };
+    if (options?.filter) body.filter = options.filter;
+    return this.request('count', body);
+  }
+
   async search(query: string, options?: { collection?: string; topK?: number; minScore?: number; orgWide?: boolean; filters?: Filters }): Promise<{ items: ShovItem[] }> {
     const body: any = { query };
     if (options?.collection) body.collection = options.collection;

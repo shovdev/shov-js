@@ -42,6 +42,10 @@ const adults = await shov.where('users', {
   filter: { age: { $gte: 18 }, role: { $in: ['admin', 'moderator'] } } 
 })
 
+// Count items in collections
+const totalUsers = await shov.count('users')
+const adminCount = await shov.count('users', { filter: { role: 'admin' } })
+
 // Vector search with advanced filters
 const results = await shov.search('find Alice', { 
   collection: 'users',
@@ -146,6 +150,29 @@ const youngUsers = await shov.where('users', {
 
 // Get all items in a collection
 const allUsers = await shov.where('users')
+```
+
+#### `count(collection, options)`
+Count items in a collection with optional filtering.
+
+```javascript
+// Count all items in a collection
+const totalUsers = await shov.count('users')
+console.log('Total users:', totalUsers.count)
+
+// Count with filters
+const adminCount = await shov.count('users', {
+  filter: { role: 'admin' }
+})
+
+// Count with advanced filters
+const activeAdults = await shov.count('users', {
+  filter: { 
+    age: { $gte: 18 }, 
+    status: 'active',
+    role: { $in: ['admin', 'moderator'] }
+  }
+})
 ```
 
 #### `update(collection, id, value)`
