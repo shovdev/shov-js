@@ -34,14 +34,19 @@ const value = await shov.get('hello')
 console.log(value) // 'world'
 
 // Work with collections
-await shov.add('users', { name: 'Alice', age: 25 })
-await shov.add('users', { name: 'Bob', age: 30 })
+await shov.add('users', { name: 'Alice', age: 25, role: 'admin' })
+await shov.add('users', { name: 'Bob', age: 30, role: 'user' })
 
-const users = await shov.where('users')
-console.log(users) // Array of user objects
+// Advanced filtering with operators
+const adults = await shov.where('users', { 
+  filter: { age: { $gte: 18 }, role: { $in: ['admin', 'moderator'] } } 
+})
 
-// Vector search
-const results = await shov.search('find Alice', { collection: 'users' })
+// Vector search with advanced filters
+const results = await shov.search('find Alice', { 
+  collection: 'users',
+  filters: { role: 'admin', age: { $between: [20, 35] } }
+})
 
 // Real-time streaming
 const { eventSource, close } = await shov.subscribe([
@@ -167,6 +172,46 @@ Clear all items from a collection.
 const result = await shov.clear('temp-data')
 console.log(`Cleared ${result.count} items`)
 ```
+
+#### `batch(operations)`
+Execute multiple operations atomically in a single transaction.
+
+```javascript
+// Execute multiple operations atomically
+const result = await shov.batch([
+  { type: 'set', name: 'user:123', value: { name: 'John', email: 'john@example.com' } },
+  { type: 'add', collection: 'orders', value: { userId: '123', total: 99.99 } },
+  { type: 'update', collection: 'inventory', id: 'item-456', value: { stock: 10 } }
+])
+
+// E-commerce checkout example (atomic transaction)
+const checkoutResult = await shov.batch([
+  { type: 'add', collection: 'orders', value: { userId: '123', items: [{ id: 'prod-1', qty: 2 }], total: 199.98 } },
+  { type: 'update', collection: 'inventory', id: 'prod-1', value: { stock: 8 } },
+  { type: 'set', name: 'user:123:last_order', value: 'order-abc123' }
+])
+
+// Read-your-writes consistency
+const consistencyResult = await shov.batch([
+  { type: 'set', name: 'counter', value: 1 },
+  { type: 'get', name: 'counter' },
+  { type: 'set', name: 'counter', value: 2 }
+])
+
+console.log(result.transactionId) // Transaction ID
+console.log(result.results) // Array of individual operation results
+```
+
+**Supported operation types:**
+- `set` - Set key-value pairs
+- `get` - Read values (for read-your-writes consistency)
+- `add` - Add items to collections
+- `update` - Update collection items by ID
+- `remove` - Remove collection items by ID
+- `forget` - Delete keys
+- `clear` - Clear entire collections
+
+**⚠️ Important**: All operations in a batch are executed atomically. If any operation fails, the entire batch is rolled back and no changes are made.
 
 #### `search(query, options)`
 Perform vector search across your data.
@@ -587,21 +632,28 @@ try {
 }
 ```
 
-### 3. Batch Operations
-Use batch operations for better performance:
+### 3. Atomic Transactions
+Use batch operations for atomic transactions and better performance:
 
 ```javascript
-// ✅ Good - batch operation using Promise.all
+// ✅ Good - atomic transaction
+const result = await shov.batch([
+  { type: 'add', collection: 'orders', value: { userId: '123', total: 99.99 } },
+  { type: 'update', collection: 'inventory', id: 'prod-1', value: { stock: 8 } },
+  { type: 'set', name: 'user:123:last_order', value: 'order-abc123' }
+])
+
+// ✅ Good - parallel operations using Promise.all (when atomicity not needed)
 const values = await Promise.all([
   shov.get('key1'),
   shov.get('key2'), 
   shov.get('key3')
 ])
 
-// ❌ Bad - sequential operations
-const value1 = await shov.get('key1')
-const value2 = await shov.get('key2')
-const value3 = await shov.get('key3')
+// ❌ Bad - sequential operations without atomicity
+const order = await shov.add('orders', { userId: '123', total: 99.99 })
+const inventory = await shov.update('inventory', 'prod-1', { stock: 8 }) // Could fail, leaving inconsistent state
+const lastOrder = await shov.set('user:123:last_order', 'order-abc123')
 ```
 
 ### 4. Data Validation

@@ -146,6 +146,35 @@ export class Shov {
     return this.request('clear', { name: collection });
   }
 
+  // Batch Operations
+  async batch(operations: Array<{
+    type: 'set' | 'get' | 'add' | 'update' | 'remove' | 'forget' | 'clear';
+    name?: string;
+    collection?: string;
+    id?: string;
+    value?: any;
+    excludeFromVector?: boolean;
+  }>): Promise<{
+    success: true;
+    results: Array<{ success: boolean; id?: string; operation: string; error?: string }>;
+    transactionId: string;
+    operationsExecuted: number;
+  }> {
+    if (!Array.isArray(operations)) {
+      throw new ShovError('Operations must be an array');
+    }
+    
+    if (operations.length === 0) {
+      throw new ShovError('Operations array cannot be empty');
+    }
+    
+    if (operations.length > 50) {
+      throw new ShovError('Maximum 50 operations allowed per batch');
+    }
+
+    return this.request('batch', { operations });
+  }
+
   async forget(key: string): Promise<{ success: true }> {
     return this.request(`forget/${key}`, {}, 'DELETE');
   }
@@ -209,6 +238,9 @@ export class Shov {
     }
     
     if (options?.expires_in) body.expires_in = options.expires_in;
+    
+    // Token endpoint requires API key in body (not header)
+    body.api_key = this.config.apiKey;
     return this.request('token', body);
   }
 
