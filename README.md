@@ -1,6 +1,6 @@
 # Shov JavaScript SDK
 
-JavaScript/TypeScript SDK for Shov - AI-native database with vector search and real-time streaming.
+JavaScript/TypeScript SDK for Shov - AI Database Engine with vector search and real-time streaming.
 
 <p align="center">
   <a href="https://shov.com" target="_blank"><strong>Website / Docs</strong></a> •
