@@ -10,10 +10,11 @@ let WebSocketImpl: typeof WebSocket | undefined;
 if (typeof WebSocket !== 'undefined') {
   // Browser environment
   WebSocketImpl = WebSocket;
-} else if (typeof global !== 'undefined' && typeof require !== 'undefined') {
+} else if (typeof globalThis !== 'undefined') {
   // Node.js environment - try to load ws package
   try {
-    const ws = require('ws');
+    // Use dynamic import for Node.js compatibility
+    const ws = eval('require')('ws');
     WebSocketImpl = ws.WebSocket || ws;
   } catch (e) {
     // ws package not available
@@ -53,9 +54,9 @@ export class ShovWebSocket extends EventEmitter {
   private reconnectDelay = 1000; // Start with 1 second
   private maxReconnectDelay = 30000; // Max 30 seconds
   private messageQueue: WebSocketMessage[] = [];
-  private pendingRequests = new Map<string, { resolve: Function; reject: Function; timer?: NodeJS.Timeout }>();
+  private pendingRequests = new Map<string, { resolve: Function; reject: Function; timer?: any }>();
   private requestTimeout = 30000; // 30 second timeout
-  private keepAliveInterval?: NodeJS.Timeout;
+  private keepAliveInterval?: any;
   private lastPingTime = 0;
   private connectionPromise?: Promise<void>;
 

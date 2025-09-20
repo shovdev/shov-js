@@ -111,7 +111,7 @@ export class Shov {
     if (this.config.useHTTP3 && !this.config.useWebSocket && typeof window === 'undefined') {
       try {
         // Try to load Node.js experimental HTTP/3 module
-        const http3 = require('node:http3');
+        const http3 = eval('require')('node:http3');
         this.http3Client = http3.connect(this.config.baseUrl, {
           rejectUnauthorized: true,
           // HTTP/3 specific options
@@ -128,7 +128,7 @@ export class Shov {
     // Initialize HTTP agent for connection pooling (Node.js only)
     if (!this.config.useWebSocket && !this.http3Client && typeof window === 'undefined') {
       try {
-        const https = require('https');
+        const https = eval('require')('https');
         this.agent = new https.Agent({
           keepAlive: true,
           keepAliveMsecs: 30000, // 30 seconds
@@ -266,7 +266,7 @@ export class Shov {
           statusCode = parseInt(headers[':status']) || 200;
         });
 
-        req.on('data', (chunk: Buffer) => {
+        req.on('data', (chunk: any) => {
           responseData += chunk.toString();
         });
 
