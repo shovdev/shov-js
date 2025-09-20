@@ -1,7 +1,7 @@
 /**
  * Shov JavaScript SDK
  *
- * @version 1.0.0
+ * @version 2.0.0
  * @license MIT
  * @see https://shov.com/
  */
@@ -10,6 +10,8 @@ export interface ShovConfig {
   projectName: string;
   apiKey: string;
   baseUrl?: string;
+  useWebSocket?: boolean; // Enable WebSocket mode for <50ms latency
+  useHTTP3?: boolean;     // Enable experimental HTTP/3 QUIC for Node.js
 }
 
 export interface ShovItem {
@@ -58,8 +60,18 @@ export class ShovError extends Error {
   }
 }
 
+// Import WebSocket client
+import { ShovWebSocket } from './websocket';
+
 export class Shov {
   private config: Required<ShovConfig>;
+  private agent?: any; // HTTP agent for connection pooling
+  private http3Client?: any; // HTTP/3 client for Node.js experimental support
+  private requestQueue: Array<() => Promise<any>> = []; // Request queue for pipelining
+  private isProcessingQueue = false;
+  private requestCache = new Map<string, { data: any; timestamp: number }>(); // Request cache
+  private readonly CACHE_TTL = 5000; // 5 second cache for reads
+  private wsClient?: ShovWebSocket; // WebSocket client for persistent connection
 
   constructor(config: ShovConfig) {
     if (!config.projectName) {
@@ -71,11 +83,100 @@ export class Shov {
 
     this.config = {
       baseUrl: 'https://shov.com',
+      useWebSocket: false,
+      useHTTP3: false,
       ...config,
     };
+
+    // Initialize WebSocket client if enabled
+    if (this.config.useWebSocket) {
+      try {
+        this.wsClient = new ShovWebSocket({
+          projectName: this.config.projectName,
+          apiKey: this.config.apiKey,
+          baseUrl: this.config.baseUrl.replace('https://', 'wss://').replace('http://', 'ws://')
+        });
+        // Pre-connect for better performance
+        this.wsClient.connect().catch(err => {
+          console.warn('WebSocket pre-connect failed, will retry on first request:', err);
+          // Don't disable WebSocket here, let it retry on actual requests
+        });
+      } catch (e) {
+        console.warn('WebSocket not available:', (e as Error).message);
+        this.wsClient = undefined;
+      }
+    }
+
+    // Initialize HTTP/3 client for Node.js experimental support
+    if (this.config.useHTTP3 && !this.config.useWebSocket && typeof window === 'undefined') {
+      try {
+        // Try to load Node.js experimental HTTP/3 module
+        const http3 = require('node:http3');
+        this.http3Client = http3.connect(this.config.baseUrl, {
+          rejectUnauthorized: true,
+          // HTTP/3 specific options
+          maxHeaderListSize: 65536,
+          maxHeaderSize: 16384,
+        });
+        console.log('🚀 HTTP/3 QUIC client initialized');
+      } catch (e) {
+        console.warn('HTTP/3 not available, falling back to HTTP/2:', (e as Error).message);
+        this.http3Client = undefined;
+      }
+    }
+
+    // Initialize HTTP agent for connection pooling (Node.js only)
+    if (!this.config.useWebSocket && !this.http3Client && typeof window === 'undefined') {
+      try {
+        const https = require('https');
+        this.agent = new https.Agent({
+          keepAlive: true,
+          keepAliveMsecs: 30000, // 30 seconds
+          maxSockets: 50,        // Max concurrent connections
+          maxFreeSockets: 10,    // Keep 10 connections open
+          timeout: 60000,        // 60 second timeout
+          scheduling: 'fifo'     // First in, first out
+        });
+      } catch (e) {
+        // Fallback for environments without https module
+        this.agent = undefined;
+      }
+    }
+  }
+
+  // Warm up connections for better performance
+  async warmup(): Promise<void> {
+    try {
+      // Make a lightweight request to establish connection
+      // Use where with a limit of 0 to avoid fetching any data
+      await this.where('__warmup__', { limit: 0 });
+    } catch (e) {
+      // Expected to fail, we just want to establish the connection
+    }
   }
 
   private async request<T>(command: string, body: object, method: string = 'POST'): Promise<T> {
+    // Use WebSocket if available for ultra-low latency
+    if (this.wsClient) {
+      try {
+        return await this.wsClient.request<T>(command, body);
+      } catch (error) {
+        console.warn('WebSocket request failed, falling back to HTTP:', error);
+        // Fall through to HTTP
+      }
+    }
+
+    // Check cache for read operations (HTTP only, WebSocket is fast enough)
+    const cacheKey = `${command}:${JSON.stringify(body)}`;
+    const isReadOperation = ['get', 'where', 'search', 'count'].some(op => command.startsWith(op));
+    
+    if (isReadOperation && method === 'POST') {
+      const cached = this.requestCache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
+        return cached.data;
+      }
+    }
+
     // Handle commands that include path parameters (like forget/key or remove/id)
     const commandParts = command.split('/');
     const baseCommand = commandParts[0];
@@ -90,14 +191,34 @@ export class Shov {
       url = `${this.config.baseUrl}/api/${command}/${this.config.projectName}`;
     }
 
-    const response = await fetch(url, {
+    const fetchOptions: any = {
       method,
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.config.apiKey}`,
+        'Authorization': `Bearer ${this.config.apiKey}`,
+        'Accept-Encoding': 'gzip, deflate, br', // Enable compression
+        'Connection': 'keep-alive', // Explicit keep-alive
+        'User-Agent': 'shov-js/2.0.0 (WebSocket+HTTP3)', // Identify optimized version
       },
       body: JSON.stringify(body),
-    });
+    };
+
+    // Use HTTP/3 if available (Node.js experimental)
+    if (this.http3Client) {
+      try {
+        return await this.makeHTTP3Request<T>(url, fetchOptions, cacheKey, isReadOperation);
+      } catch (error) {
+        console.warn('HTTP/3 request failed, falling back to HTTP/2:', error);
+        // Fall through to regular HTTP
+      }
+    }
+
+    // Use HTTP agent for connection pooling in Node.js
+    if (this.agent) {
+      fetchOptions.agent = this.agent;
+    }
+
+    const response = await fetch(url, fetchOptions);
 
     const data = await response.json();
 
@@ -105,7 +226,92 @@ export class Shov {
       throw new ShovError(data.error || 'An unknown error occurred', response.status);
     }
 
+    // Cache successful read operations
+    if (isReadOperation && method === 'POST') {
+      this.requestCache.set(cacheKey, { data, timestamp: Date.now() });
+      
+      // Clean up old cache entries (simple LRU)
+      if (this.requestCache.size > 100) {
+        const oldestKey = this.requestCache.keys().next().value;
+        if (oldestKey) {
+          this.requestCache.delete(oldestKey);
+        }
+      }
+    }
+
     return data;
+  }
+
+  private async makeHTTP3Request<T>(url: string, fetchOptions: any, cacheKey: string, isReadOperation: boolean): Promise<T> {
+    return new Promise((resolve, reject) => {
+      try {
+        const urlObj = new URL(url);
+        const path = urlObj.pathname + (urlObj.search || '');
+        
+        const req = this.http3Client.request({
+          ':method': fetchOptions.method,
+          ':path': path,
+          ':scheme': 'https',
+          ':authority': urlObj.host,
+          'content-type': fetchOptions.headers['Content-Type'],
+          'authorization': fetchOptions.headers['Authorization'],
+          'accept-encoding': fetchOptions.headers['Accept-Encoding'],
+          'user-agent': fetchOptions.headers['User-Agent'],
+        });
+
+        let responseData = '';
+        let statusCode = 200;
+
+        req.on('response', (headers: any) => {
+          statusCode = parseInt(headers[':status']) || 200;
+        });
+
+        req.on('data', (chunk: Buffer) => {
+          responseData += chunk.toString();
+        });
+
+        req.on('end', () => {
+          try {
+            const data = JSON.parse(responseData);
+            
+            if (statusCode >= 400) {
+              reject(new ShovError(data.error || 'HTTP/3 request failed', statusCode));
+              return;
+            }
+
+            // Cache successful read operations
+            if (isReadOperation && fetchOptions.method === 'POST') {
+              this.requestCache.set(cacheKey, { data, timestamp: Date.now() });
+              
+              // Clean up old cache entries (simple LRU)
+              if (this.requestCache.size > 100) {
+                const oldestKey = this.requestCache.keys().next().value;
+                if (oldestKey) {
+                  this.requestCache.delete(oldestKey);
+                }
+              }
+            }
+
+            resolve(data);
+          } catch (parseError) {
+            reject(new ShovError('Failed to parse HTTP/3 response', 500));
+          }
+        });
+
+        req.on('error', (error: Error) => {
+          reject(new ShovError(`HTTP/3 request error: ${error.message}`, 500));
+        });
+
+        // Send the request body
+        if (fetchOptions.body) {
+          req.write(fetchOptions.body);
+        }
+        req.end();
+
+      } catch (error) {
+        reject(new ShovError(`HTTP/3 setup error: ${(error as Error).message}`, 500));
+      }
+    });
   }
 
   // Key/Value Operations
