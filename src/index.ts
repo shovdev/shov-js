@@ -36,6 +36,17 @@ export interface FilterOperators {
   $exists?: boolean;   // Field exists (true) or is null (false)
 }
 
+// Logical operators for combining filters
+export interface LogicalOperators {
+  $or?: FilterObject[];  // OR logic - any of the conditions must match
+  $and?: FilterObject[]; // AND logic - all conditions must match
+}
+
+// Complete filter object that can contain field filters and logical operators
+export interface FilterObject extends LogicalOperators {
+  [field: string]: FilterValue | FilterObject[] | undefined;
+}
+
 // Filter can be direct values or operator objects
 export type FilterValue = any | FilterOperators;
 export type Filters = Record<string, FilterValue>;
@@ -115,7 +126,7 @@ export class Shov {
     return this.request('add-many', { name: collection, items });
   }
 
-  async where(collection: string, options?: { filter?: Filters; limit?: number; sort?: string }): Promise<{ items: ShovItem[] }> {
+  async where(collection: string, options?: { filter?: FilterObject; limit?: number; sort?: string }): Promise<{ items: ShovItem[] }> {
     const body: any = { name: collection };
     if (options?.filter) body.filter = options.filter;
     if (options?.limit) body.limit = options.limit;
@@ -123,13 +134,13 @@ export class Shov {
     return this.request('where', body);
   }
 
-  async count(collection: string, options?: { filter?: Filters }): Promise<{ success: true; count: number; collection: string }> {
+  async count(collection: string, options?: { filter?: FilterObject }): Promise<{ success: true; count: number; collection: string }> {
     const body: any = { name: collection };
     if (options?.filter) body.filter = options.filter;
     return this.request('count', body);
   }
 
-  async search(query: string, options?: { collection?: string; topK?: number; minScore?: number; orgWide?: boolean; filters?: Filters }): Promise<{ items: ShovItem[] }> {
+  async search(query: string, options?: { collection?: string; topK?: number; minScore?: number; orgWide?: boolean; filters?: FilterObject }): Promise<{ items: ShovItem[] }> {
     const body: any = { query };
     if (options?.collection) body.collection = options.collection;
     if (options?.topK) body.topK = options.topK;
