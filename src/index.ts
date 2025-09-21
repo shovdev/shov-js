@@ -155,6 +155,46 @@ export class Shov {
     }
   }
 
+  /**
+   * Invalidate cache entries that might be affected by write operations
+   */
+  private invalidateCache(command: string, body: any): void {
+    const commandParts = command.split('/');
+    const baseCommand = commandParts[0];
+    const pathParam = commandParts[1];
+
+    // For key operations (set, forget), invalidate get cache for that key
+    if (baseCommand === 'set' || baseCommand === 'forget') {
+      const keyName = pathParam || (body as any).name;
+      if (keyName) {
+        const getCacheKey = `get:${JSON.stringify({ name: keyName })}`;
+        this.requestCache.delete(getCacheKey);
+        console.log(`🗑️ Invalidated SDK cache for key: ${keyName}`);
+      }
+    }
+
+    // For collection operations (add, update, remove, clear), clear entire cache to be safe
+    if (['add', 'update', 'remove', 'clear'].includes(baseCommand)) {
+      const collectionName = (body as any).collection;
+      if (collectionName) {
+        // Clear entire cache for collection operations to prevent any stale data
+        // This is more aggressive but ensures consistency
+        const cacheSize = this.requestCache.size;
+        this.requestCache.clear();
+        console.log(`🗑️ Cleared entire SDK cache (${cacheSize} entries) for collection operation: ${collectionName}`);
+      }
+    }
+
+    // For batch operations, invalidate based on the operations in the batch
+    if (baseCommand === 'batch' && (body as any).operations) {
+      const operations = (body as any).operations;
+      for (const op of operations) {
+        // Recursively invalidate for each operation in the batch
+        this.invalidateCache(op.type, op);
+      }
+    }
+  }
+
   private async request<T>(command: string, body: object, method: string = 'POST'): Promise<T> {
     // Use WebSocket if available for ultra-low latency
     if (this.wsClient) {
@@ -169,6 +209,7 @@ export class Shov {
     // Check cache for read operations (HTTP only, WebSocket is fast enough)
     const cacheKey = `${command}:${JSON.stringify(body)}`;
     const isReadOperation = ['get', 'where', 'search', 'count'].some(op => command.startsWith(op));
+    const isWriteOperation = ['set', 'add', 'update', 'forget', 'remove', 'clear', 'batch'].some(op => command.startsWith(op));
     
     if (isReadOperation && method === 'POST') {
       const cached = this.requestCache.get(cacheKey);
@@ -237,6 +278,11 @@ export class Shov {
           this.requestCache.delete(oldestKey);
         }
       }
+    }
+
+    // Invalidate cache for write operations to prevent stale reads
+    if (isWriteOperation) {
+      this.invalidateCache(command, body);
     }
 
     return data;
@@ -404,6 +450,10 @@ export class Shov {
 
   async forgetFile(filename: string): Promise<{ success: true; count: number }> {
     return this.request(`forget-file/${filename}`, {}, 'DELETE');
+  }
+
+  async listFiles(): Promise<{ success: true; files: Array<{ id: string; filename: string; mime_type: string; size: number; status: string; created_at: string; uploaded_at: string }> }> {
+    return this.request('files-list', {});
   }
 
   // File Operations
