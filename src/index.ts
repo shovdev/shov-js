@@ -69,6 +69,7 @@ export class Shov {
   private http3Client?: any; // HTTP/3 client for Node.js experimental support
   private requestQueue: Array<() => Promise<any>> = []; // Request queue for pipelining
   private isProcessingQueue = false;
+  private pendingRequests = new Map<string, Promise<any>>(); // Deduplication map
   private requestCache = new Map<string, { data: any; timestamp: number }>(); // Request cache
   private readonly CACHE_TTL = 5000; // 5 second cache for reads
   private wsClient?: ShovWebSocket; // WebSocket client for persistent connection
@@ -196,11 +197,23 @@ export class Shov {
   }
 
   private async request<T>(command: string, body: object, method: string = 'POST'): Promise<T> {
+    // Request deduplication for identical requests
+    const requestKey = `${command}:${method}:${JSON.stringify(body)}`;
+    if (this.pendingRequests.has(requestKey)) {
+      console.log(`🔄 Deduplicating request: ${command}`);
+      return await this.pendingRequests.get(requestKey)!;
+    }
+
     // Use WebSocket if available for ultra-low latency
     if (this.wsClient) {
       try {
-        return await this.wsClient.request<T>(command, body);
+        const wsPromise = this.wsClient.request<T>(command, body);
+        this.pendingRequests.set(requestKey, wsPromise);
+        const result = await wsPromise;
+        this.pendingRequests.delete(requestKey);
+        return result;
       } catch (error) {
+        this.pendingRequests.delete(requestKey);
         console.warn('WebSocket request failed, falling back to HTTP:', error);
         // Fall through to HTTP
       }
@@ -240,8 +253,14 @@ export class Shov {
         'Accept-Encoding': 'gzip, deflate, br', // Enable compression
         'Connection': 'keep-alive', // Explicit keep-alive
         'User-Agent': 'shov-js/2.0.0 (WebSocket+HTTP3)', // Identify optimized version
+        'Cache-Control': 'no-cache', // Ensure fresh data for writes
+        'CF-Cache-Status': 'DYNAMIC', // Hint to Cloudflare for dynamic content
+        'CF-Worker': 'v3-optimized' // Help CF route to optimized workers
       },
       body: JSON.stringify(body),
+      // Additional fetch optimizations
+      keepalive: true, // Enable keep-alive at fetch level
+      signal: AbortSignal.timeout(30000), // 30 second timeout
     };
 
     // Use HTTP/3 if available (Node.js experimental)
@@ -259,13 +278,25 @@ export class Shov {
       fetchOptions.agent = this.agent;
     }
 
-    const response = await fetch(url, fetchOptions);
+    // Create HTTP request promise and add to deduplication map
+    const httpPromise = (async () => {
+      try {
+        const response = await fetch(url, fetchOptions);
+        const data = await response.json();
 
-    const data = await response.json();
+        if (!response.ok) {
+          throw new ShovError(data.error || 'An unknown error occurred', response.status);
+        }
 
-    if (!response.ok) {
-      throw new ShovError(data.error || 'An unknown error occurred', response.status);
-    }
+        return data;
+      } finally {
+        // Clean up deduplication map
+        this.pendingRequests.delete(requestKey);
+      }
+    })();
+
+    this.pendingRequests.set(requestKey, httpPromise);
+    const data = await httpPromise;
 
     // Cache successful read operations
     if (isReadOperation && method === 'POST') {
