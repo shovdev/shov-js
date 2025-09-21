@@ -252,7 +252,7 @@ export class Shov {
         'Authorization': `Bearer ${this.config.apiKey}`,
         'Accept-Encoding': 'gzip, deflate, br', // Enable compression
         'Connection': 'keep-alive', // Explicit keep-alive
-        'User-Agent': 'shov-js/2.0.0 (WebSocket+HTTP3)', // Identify optimized version
+        'User-Agent': 'shov-js/2.1.0 (V3-Optimized+HTTP3)', // Identify V3 optimized version
         'Cache-Control': 'no-cache', // Ensure fresh data for writes
         'CF-Cache-Status': 'DYNAMIC', // Hint to Cloudflare for dynamic content
         'CF-Worker': 'v3-optimized' // Help CF route to optimized workers
