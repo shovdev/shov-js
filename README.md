@@ -1,6 +1,6 @@
 # Shov JavaScript SDK
 
-JavaScript/TypeScript SDK for Shov - Instant AI-Powered Backends with vector search and real-time streaming.
+JavaScript/TypeScript SDK for Shov - Instant AI-Powered Backends with vector search, edge functions, and real-time streaming.
 
 <p align="center">
   <a href="https://shov.com" target="_blank"><strong>Website / Docs</strong></a> •
@@ -83,6 +83,16 @@ const shov = new Shov({
   apiKey: process.env.SHOV_API_KEY
 })
 ```
+
+## Performance
+
+Shov delivers exceptional performance from 300+ global edge locations:
+
+- **Cached Reads**: ~4ms globally (19x faster than Supabase, 10x faster than MongoDB)
+- **Complex Queries**: ~8ms per operation (8.7x faster than Supabase, 5.6x faster than MongoDB)  
+- **Edge Functions**: ~68ms globally (hot cached functions + data)
+- **Vector Search**: ~100ms globally with automatic embeddings
+- **Real-time Streaming**: <100ms message delivery to active subscribers
 
 ## API Reference
 
