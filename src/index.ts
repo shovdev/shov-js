@@ -665,6 +665,197 @@ export class Shov {
       }
     };
   }
+
+  // Edge Functions Management
+
+  /**
+   * List all deployed edge functions in the project.
+   */
+  async listEdgeFunctions(): Promise<{
+    success: true;
+    functions: Array<{
+      name: string;
+      url: string;
+      size: string;
+      deployedAt: string;
+      version?: number;
+    }>;
+  }> {
+    return this.request('edge-list', {});
+  }
+
+  /**
+   * Create/deploy a new edge function.
+   */
+  async createEdgeFunction(
+    name: string,
+    code: string,
+    config?: {
+      timeout?: number;
+      description?: string;
+    }
+  ): Promise<{
+    success: true;
+    name: string;
+    url: string;
+    deployedAt: string;
+    version: number;
+  }> {
+    return this.request('edge-create', {
+      name,
+      code,
+      config: {
+        timeout: 10000,
+        description: `Edge function: ${name}`,
+        ...config
+      }
+    });
+  }
+
+  /**
+   * Update an existing edge function.
+   */
+  async updateEdgeFunction(
+    name: string,
+    code: string,
+    config?: {
+      timeout?: number;
+      description?: string;
+    }
+  ): Promise<{
+    success: true;
+    name: string;
+    url: string;
+    deployedAt: string;
+    version: number;
+  }> {
+    return this.request('edge-update', {
+      name,
+      code,
+      config: {
+        timeout: 10000,
+        description: `Edge function: ${name}`,
+        ...config
+      }
+    });
+  }
+
+  /**
+   * Delete an edge function.
+   */
+  async deleteEdgeFunction(name: string): Promise<{
+    success: true;
+    message: string;
+  }> {
+    return this.request('edge-delete', { name });
+  }
+
+  /**
+   * Rollback an edge function to a previous version.
+   */
+  async rollbackEdgeFunction(
+    name: string,
+    version?: number
+  ): Promise<{
+    success: true;
+    name: string;
+    version: number;
+    message: string;
+  }> {
+    return this.request('edge-rollback', {
+      name,
+      version
+    });
+  }
+
+  /**
+   * Get logs from edge functions.
+   */
+  async getEdgeFunctionLogs(
+    functionName?: string
+  ): Promise<{
+    success: true;
+    logs: Array<{
+      timestamp: string;
+      function: string;
+      level: string;
+      message: string;
+      duration?: string;
+      region?: string;
+    }>;
+  }> {
+    return this.request('edge-logs', {
+      functionName
+    });
+  }
+
+  // Secrets Management
+
+  /**
+   * List all secret names (values are never returned for security).
+   */
+  async listSecrets(): Promise<{
+    success: true;
+    secrets: string[];
+  }> {
+    return this.request('secrets-list', {});
+  }
+
+  /**
+   * Set a secret for edge functions.
+   */
+  async setSecret(
+    name: string,
+    value: string,
+    functions?: string[]
+  ): Promise<{
+    success: true;
+    message: string;
+  }> {
+    return this.request('secrets-set', {
+      name,
+      value,
+      functions: functions || []
+    });
+  }
+
+  /**
+   * Set multiple secrets at once (bulk operation).
+   */
+  async setManySecrets(
+    secrets: Array<{ name: string; value: string }>,
+    functions?: string[]
+  ): Promise<{
+    success: true;
+    message: string;
+    results: Array<{
+      function: string;
+      secretsSet: number;
+      totalSecrets: number;
+    }>;
+    secretNames: string[];
+  }> {
+    return this.request('secrets-set-many', {
+      secrets,
+      functions: functions || []
+    });
+  }
+
+  /**
+   * Delete a secret.
+   */
+  async deleteSecret(
+    name: string,
+    functions?: string[]
+  ): Promise<{
+    success: true;
+    message: string;
+  }> {
+    return this.request('secrets-delete', {
+      name,
+      functions: functions || []
+    });
+  }
 }
 
 export function createShov(config: ShovConfig): Shov {
