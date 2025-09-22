@@ -49,6 +49,67 @@ export interface FilterObject extends LogicalOperators {
   [field: string]: FilterValue | FilterObject[] | undefined;
 }
 
+// Blocks system interfaces
+export interface Block {
+  id: string;
+  slug: string;
+  name: string;
+  description?: string;
+  category: string;
+  tags: string[];
+  isOfficial: boolean;
+  isPublic: boolean;
+  latestVersion: string;
+  createdAt: string;
+  updatedAt: string;
+  totalDeployments: number;
+  totalLikes: number;
+  totalForks: number;
+  author: {
+    name: string;
+    slug: string;
+    isOfficial: boolean;
+  };
+}
+
+export interface BlockVersion {
+  version: string;
+  versionNumber: number;
+  readme?: string;
+  changelog?: string;
+  createdAt: string;
+}
+
+export interface BlockFunction {
+  name: string;
+  description?: string;
+  code: string;
+  methods: string[];
+  path?: string;
+  expectedPayload?: any;
+  responseSchema?: any;
+}
+
+export interface BlockSecret {
+  name: string;
+  description?: string;
+  required: boolean;
+  defaultValue?: string;
+}
+
+export interface BlockCollection {
+  name: string;
+  description?: string;
+  schema?: any;
+}
+
+export interface BlockDetail extends Block {
+  version: BlockVersion;
+  functions: BlockFunction[];
+  secrets: BlockSecret[];
+  collections: BlockCollection[];
+}
+
 // Filter can be direct values or operator objects
 export type FilterValue = any | FilterOperators;
 export type Filters = Record<string, FilterValue>;
@@ -855,6 +916,141 @@ export class Shov {
       name,
       functions: functions || []
     });
+  }
+
+  // ============================================================================
+  // BLOCKS MANAGEMENT
+  // ============================================================================
+
+  /**
+   * List available blocks with optional filtering.
+   */
+  async listBlocks(options?: {
+    category?: string;
+    author?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{
+    success: true;
+    blocks: Block[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+      hasNext: boolean;
+      hasPrev: boolean;
+    };
+  }> {
+    const params = new URLSearchParams();
+    if (options?.category) params.append('category', options.category);
+    if (options?.author) params.append('author', options.author);
+    if (options?.search) params.append('search', options.search);
+    if (options?.page) params.append('page', options.page.toString());
+    if (options?.limit) params.append('limit', options.limit.toString());
+    
+    // Use a custom command for blocks list since it's a GET request with params
+    return this.request('blocks-list', options || {}, 'GET');
+  }
+
+  /**
+   * Get details of a specific block.
+   */
+  async getBlock(
+    slug: string,
+    version?: string
+  ): Promise<{
+    success: true;
+    block: BlockDetail;
+  }> {
+    const params = new URLSearchParams();
+    if (version) params.append('version', version);
+    
+    return this.request('blocks-get', { slug, version }, 'GET');
+  }
+
+  /**
+   * Deploy a block to your project.
+   */
+  async deployBlock(
+    slug: string,
+    options?: {
+      version?: string;
+      project?: string;
+    }
+  ): Promise<{
+    success: true;
+    message: string;
+    functionsDeployed: string[];
+    secretsCreated: string[];
+    deploymentId: string;
+  }> {
+    const params = new URLSearchParams();
+    if (options?.version) params.append('version', options.version);
+    if (options?.project) params.append('project', options.project);
+    
+    return this.request('blocks-deploy', { slug, ...options }, 'POST');
+  }
+
+  /**
+   * Create a new block.
+   */
+  async createBlock(data: {
+    slug: string;
+    name: string;
+    description?: string;
+    category: string;
+    organizationId: string;
+    readme?: string;
+    functions?: BlockFunction[];
+    secrets?: BlockSecret[];
+    collections?: BlockCollection[];
+    version?: string;
+  }): Promise<{
+    success: true;
+    blockId: string;
+    slug: string;
+    version: string;
+    message: string;
+  }> {
+    return this.request('blocks-create', data, 'POST');
+  }
+
+  /**
+   * Get version history of a block.
+   */
+  async getBlockVersions(slug: string): Promise<{
+    success: true;
+    versions: BlockVersion[];
+    latestVersion: string;
+  }> {
+    return this.request('blocks-versions', { slug }, 'GET');
+  }
+
+  /**
+   * Like or unlike a block.
+   */
+  async toggleBlockLike(slug: string): Promise<{
+    success: true;
+    liked: boolean;
+    totalLikes: number;
+  }> {
+    return this.request('blocks-like', { slug }, 'POST');
+  }
+
+  /**
+   * Add a comment to a block.
+   */
+  async addBlockComment(
+    slug: string,
+    comment: string
+  ): Promise<{
+    success: true;
+    commentId: string;
+    message: string;
+  }> {
+    return this.request('blocks-comment', { slug, comment }, 'POST');
   }
 }
 

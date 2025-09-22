@@ -348,6 +348,130 @@ if (result.success) {
 }
 ```
 
+### Edge Functions Operations
+
+#### `listEdgeFunctions()`
+List all deployed edge functions.
+
+```javascript
+const functions = await shov.listEdgeFunctions()
+console.log('Deployed functions:', functions)
+```
+
+#### `createEdgeFunction(name, code)`
+Deploy a JavaScript function to the global edge network.
+
+```javascript
+const functionCode = `
+export default async function(request, env, ctx) {
+  return new Response(JSON.stringify({
+    message: "Hello from the edge!",
+    timestamp: new Date().toISOString()
+  }));
+}
+`;
+
+const result = await shov.createEdgeFunction('hello-world', functionCode)
+console.log('Function deployed:', result.url)
+```
+
+#### `updateEdgeFunction(name, code)`
+Update an existing edge function with new code.
+
+```javascript
+const updatedCode = `
+export default async function(request, env, ctx) {
+  return new Response(JSON.stringify({
+    message: "Updated from SDK",
+    version: 2
+  }));
+}
+`;
+
+const result = await shov.updateEdgeFunction('hello-world', updatedCode)
+console.log('Function updated:', result.url)
+```
+
+#### `deleteEdgeFunction(name)`
+Delete an edge function from the global network.
+
+```javascript
+await shov.deleteEdgeFunction('hello-world')
+console.log('Function deleted successfully')
+```
+
+#### `rollbackEdgeFunction(name, version?)`
+Rollback an edge function to a previous version.
+
+```javascript
+// Rollback to previous version
+const result = await shov.rollbackEdgeFunction('hello-world')
+console.log('Rolled back to version:', result.version)
+
+// Rollback to specific version
+const specificResult = await shov.rollbackEdgeFunction('hello-world', 3)
+console.log('Rolled back to version:', specificResult.version)
+```
+
+#### `getEdgeFunctionLogs(name?)`
+Get logs from your edge functions.
+
+```javascript
+// Get recent logs from all functions
+const logs = await shov.getEdgeFunctionLogs()
+console.log('Recent logs:', logs)
+
+// Get logs from specific function
+const functionLogs = await shov.getEdgeFunctionLogs('hello-world')
+console.log('Function logs:', functionLogs)
+```
+
+### Secrets Management Operations
+
+#### `listSecrets()`
+List all secret names (values are never returned for security).
+
+```javascript
+const secrets = await shov.listSecrets()
+console.log('Secret names:', secrets.secrets)
+```
+
+#### `setSecret(name, value, functions?)`
+Set a secret for edge functions.
+
+```javascript
+// Set a secret for all functions
+await shov.setSecret('DATABASE_URL', 'postgresql://user:pass@localhost:5432/db')
+
+// Set a secret for specific functions
+await shov.setSecret('API_KEY', 'sk_live_abc123', ['user-auth', 'payment-api'])
+```
+
+#### `setManySecrets(secrets, functions?)`
+Set multiple secrets at once (bulk operation).
+
+```javascript
+const secrets = [
+  { name: 'DATABASE_URL', value: 'postgresql://user:pass@localhost:5432/db' },
+  { name: 'REDIS_URL', value: 'redis://localhost:6379' },
+  { name: 'JWT_SECRET', value: 'super-secret-jwt-key' }
+]
+
+const result = await shov.setManySecrets(secrets)
+console.log('Set secrets:', result.secretNames)
+```
+
+#### `deleteSecret(name, functions?)`
+Delete a secret from edge functions.
+
+```javascript
+// Delete a secret from all functions
+await shov.deleteSecret('OLD_API_KEY')
+
+// Delete from specific functions
+await shov.deleteSecret('TEMP_TOKEN', ['test-api', 'dev-webhook'])
+```
+
 ### Utility Operations
 
 #### `contents()`

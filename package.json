@@ -1,6 +1,6 @@
 {
   "name": "shov-js",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "JavaScript SDK for Shov - Instant AI-Powered Backends with vector search, edge functions, and real-time streaming",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
