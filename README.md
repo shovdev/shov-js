@@ -1,6 +1,7 @@
 # Shov JavaScript SDK
 
-JavaScript/TypeScript SDK for Shov - Instant Serverless Backends with vector search, edge functions, and real-time streaming.
+JavaScript/TypeScript SDK for Shov - The backend for
+AI-coded apps with vector search, edge functions, and real-time streaming.
 
 <p align="center">
   <a href="https://shov.com" target="_blank"><strong>Website / Docs</strong></a> •

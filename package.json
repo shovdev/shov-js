@@ -1,7 +1,8 @@
 {
   "name": "shov-js",
   "version": "2.2.0",
-  "description": "JavaScript SDK for Shov - Instant Serverless Backends with vector search, edge functions, and real-time streaming",
+  "description": "JavaScript SDK for Shov - The backend for
+AI-coded apps with vector search, edge functions, and real-time streaming",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
