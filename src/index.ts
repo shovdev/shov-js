@@ -1052,6 +1052,137 @@ export class Shov {
   }> {
     return this.request('blocks-comment', { slug, comment }, 'POST');
   }
+
+  // Events API Methods
+  
+  /**
+   * Track a custom event
+   * @param eventName - Name of the event to track
+   * @param properties - Optional properties object
+   * @param options - Optional configuration (environment)
+   * @returns Promise with event ID and success status
+   */
+  async eventsTrack(
+    eventName: string,
+    properties: Record<string, any> = {},
+    options: { environment?: string } = {}
+  ): Promise<{
+    success: boolean;
+    eventId: string;
+  }> {
+    return this.request('events-track', {
+      event: eventName,
+      properties,
+      environment: options.environment || 'production'
+    }, 'POST');
+  }
+
+  /**
+   * Query historical events
+   * @param options - Query options including filters, time range, and limit
+   * @returns Promise with array of events and metadata
+   */
+  async eventsQuery(options: {
+    filters?: Record<string, any>;
+    timeRange?: '1h' | '6h' | '12h' | '24h' | '7d' | '30d';
+    limit?: number;
+    eventName?: string;
+    environment?: string;
+  } = {}): Promise<{
+    success: boolean;
+    events: Array<{
+      eventId: string;
+      eventName: string;
+      properties: Record<string, any>;
+      timestamp: number;
+      projectId: string;
+      environment: string;
+    }>;
+    sources: {
+      kv: number;
+      analytics: number;
+      total: number;
+    };
+  }> {
+    return this.request('events-query', {
+      filters: options.filters || {},
+      timeRange: options.timeRange || '24h',
+      limit: options.limit || 100,
+      eventName: options.eventName,
+      environment: options.environment
+    }, 'POST');
+  }
+
+  /**
+   * Tail recent events in real-time (past 60 seconds)
+   * @param options - Tail options including event filter and limit
+   * @returns Promise with array of recent events
+   */
+  async eventsTail(options: {
+    event?: string;
+    limit?: number;
+  } = {}): Promise<{
+    success: boolean;
+    events: Array<{
+      eventId: string;
+      eventName: string;
+      properties: Record<string, any>;
+      timestamp: number;
+      projectId: string;
+      organizationId: string;
+      environment: string;
+    }>;
+    count: number;
+  }> {
+    const params = new URLSearchParams();
+    if (options.event) params.append('event', options.event);
+    if (options.limit) params.append('limit', options.limit.toString());
+    
+    const url = `/events/${this.projectName}/tail${params.toString() ? '?' + params.toString() : ''}`;
+    
+    const response = await fetch(`${this.baseUrl}${url}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Failed to tail events' }));
+      throw new ShovError(error.error || 'Failed to tail events', response.status);
+    }
+    
+    return response.json();
+  }
+
+  /**
+   * Convenience namespace for events API
+   */
+  events = {
+    /**
+     * Track a custom event
+     */
+    track: (eventName: string, properties: Record<string, any> = {}, options: { environment?: string } = {}) => 
+      this.eventsTrack(eventName, properties, options),
+    
+    /**
+     * Query historical events
+     */
+    query: (options: {
+      filters?: Record<string, any>;
+      timeRange?: '1h' | '6h' | '12h' | '24h' | '7d' | '30d';
+      limit?: number;
+      eventName?: string;
+      environment?: string;
+    } = {}) => this.eventsQuery(options),
+    
+    /**
+     * Tail recent events
+     */
+    tail: (options: { event?: string; limit?: number } = {}) => 
+      this.eventsTail(options)
+  };
 }
 
 export function createShov(config: ShovConfig): Shov {
