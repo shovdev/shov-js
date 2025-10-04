@@ -1166,12 +1166,12 @@ export class Shov {
     if (options.event) params.append('event', options.event);
     if (options.limit) params.append('limit', options.limit.toString());
     
-    const url = `/events/${this.projectName}/tail${params.toString() ? '?' + params.toString() : ''}`;
+    const url = `/events/${this.config.projectName}/tail${params.toString() ? '?' + params.toString() : ''}`;
     
-    const response = await fetch(`${this.baseUrl}${url}`, {
+    const response = await fetch(`${this.config.baseUrl}${url}`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
+        'Authorization': `Bearer ${this.config.apiKey}`,
         'Content-Type': 'application/json'
       }
     });
