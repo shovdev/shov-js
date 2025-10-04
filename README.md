@@ -90,7 +90,7 @@ Shov delivers exceptional performance from 300+ global edge locations:
 
 - **Cached Reads**: ~4ms globally (19x faster than Supabase, 10x faster than MongoDB)
 - **Complex Queries**: ~8ms per operation (8.7x faster than Supabase, 5.6x faster than MongoDB)  
-- **Edge Functions**: ~68ms globally (hot cached functions + data)
+- **Code Functions**: ~68ms globally (hot cached functions + data)
 - **Vector Search**: ~100ms globally with automatic embeddings
 - **Real-time Streaming**: <100ms message delivery to active subscribers
 
@@ -348,18 +348,18 @@ if (result.success) {
 }
 ```
 
-### Edge Functions Operations
+### Code Functions Operations
 
-#### `listEdgeFunctions()`
-List all deployed edge functions.
+#### `listCodeFunctions()`
+List all deployed code functions.
 
 ```javascript
-const functions = await shov.listEdgeFunctions()
+const functions = await shov.listCodeFunctions()
 console.log('Deployed functions:', functions)
 ```
 
-#### `createEdgeFunction(name, code)`
-Deploy a JavaScript function to the global edge network.
+#### `writeCodeFunction(name, code)`
+Write (create or overwrite) a JavaScript function deployed to the global edge network.
 
 ```javascript
 const functionCode = `
@@ -371,59 +371,76 @@ export default async function(request, env, ctx) {
 }
 `;
 
-const result = await shov.createEdgeFunction('hello-world', functionCode)
-console.log('Function deployed:', result.url)
+const result = await shov.writeCodeFunction('hello-world', functionCode)
+console.log('Function written:', result.url)
 ```
 
-#### `updateEdgeFunction(name, code)`
-Update an existing edge function with new code.
+#### `readCodeFunction(name)`
+Read the source code of a deployed code function.
 
 ```javascript
-const updatedCode = `
-export default async function(request, env, ctx) {
-  return new Response(JSON.stringify({
-    message: "Updated from SDK",
-    version: 2
-  }));
-}
-`;
-
-const result = await shov.updateEdgeFunction('hello-world', updatedCode)
-console.log('Function updated:', result.url)
+const result = await shov.readCodeFunction('hello-world')
+console.log('Function code:', result.code)
+console.log('Version:', result.version)
+console.log('Size:', result.size)
 ```
 
-#### `deleteEdgeFunction(name)`
-Delete an edge function from the global network.
+#### `deleteCodeFunction(name)`
+Delete a code function from the global network.
 
 ```javascript
-await shov.deleteEdgeFunction('hello-world')
+await shov.deleteCodeFunction('hello-world')
 console.log('Function deleted successfully')
 ```
 
-#### `rollbackEdgeFunction(name, version?)`
-Rollback an edge function to a previous version.
+#### `rollbackCodeFunction(name, version?)`
+Rollback a code function to a previous version.
 
 ```javascript
 // Rollback to previous version
-const result = await shov.rollbackEdgeFunction('hello-world')
+const result = await shov.rollbackCodeFunction('hello-world')
 console.log('Rolled back to version:', result.version)
 
 // Rollback to specific version
-const specificResult = await shov.rollbackEdgeFunction('hello-world', 3)
+const specificResult = await shov.rollbackCodeFunction('hello-world', 3)
 console.log('Rolled back to version:', specificResult.version)
 ```
 
-#### `getEdgeFunctionLogs(name?)`
-Get logs from your edge functions.
+#### `getCodeFunctionLogs(name?)`
+Get logs from your code functions.
 
 ```javascript
 // Get recent logs from all functions
-const logs = await shov.getEdgeFunctionLogs()
+const logs = await shov.getCodeFunctionLogs()
 console.log('Recent logs:', logs)
 
 // Get logs from specific function
-const functionLogs = await shov.getEdgeFunctionLogs('hello-world')
+const functionLogs = await shov.getCodeFunctionLogs('hello-world')
 console.log('Function logs:', functionLogs)
+```
+
+#### `pullCodeFiles()`
+Download all code files from your project.
+
+```javascript
+const result = await shov.pullCodeFiles()
+
+// Result contains all files:
+// {
+//   'index.js': { code: '...', version: 3, deployedAt: '...', size: '2.1KB' },
+//   'routes/users.js': { code: '...', version: 1, deployedAt: '...', size: '1.5KB' },
+//   'services/auth.js': { code: '...', version: 2, deployedAt: '...', size: '3.2KB' }
+// }
+
+// Write files to disk
+for (const [filename, data] of Object.entries(result.files)) {
+  if (!data.error) {
+    const filepath = path.join('./my-code', filename)
+    await fs.promises.mkdir(path.dirname(filepath), { recursive: true })
+    await fs.promises.writeFile(filepath, data.code, 'utf8')
+    console.log(`Downloaded: ${filename}`)
+  }
+}
 ```
 
 ### Secrets Management Operations

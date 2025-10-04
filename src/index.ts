@@ -727,12 +727,12 @@ export class Shov {
     };
   }
 
-  // Edge Functions Management
+  // Code Functions Management
 
   /**
-   * List all deployed edge functions in the project.
+   * List all deployed code functions in the project.
    */
-  async listEdgeFunctions(): Promise<{
+  async listCodeFunctions(): Promise<{
     success: true;
     functions: Array<{
       name: string;
@@ -742,13 +742,13 @@ export class Shov {
       version?: number;
     }>;
   }> {
-    return this.request('edge-list', {});
+    return this.request('code-list', {});
   }
 
   /**
-   * Create/deploy a new edge function.
+   * Write (create or overwrite) a code function.
    */
-  async createEdgeFunction(
+  async writeCodeFunction(
     name: string,
     code: string,
     config?: {
@@ -762,59 +762,45 @@ export class Shov {
     deployedAt: string;
     version: number;
   }> {
-    return this.request('edge-create', {
+    return this.request('code-write', {
       name,
       code,
       config: {
         timeout: 10000,
-        description: `Edge function: ${name}`,
+        description: `Code function: ${name}`,
         ...config
       }
     });
   }
 
   /**
-   * Update an existing edge function.
+   * Read the source code of a deployed code function.
    */
-  async updateEdgeFunction(
-    name: string,
-    code: string,
-    config?: {
-      timeout?: number;
-      description?: string;
-    }
-  ): Promise<{
+  async readCodeFunction(name: string): Promise<{
     success: true;
     name: string;
-    url: string;
-    deployedAt: string;
+    code: string;
     version: number;
+    deployedAt: string;
+    size: string;
   }> {
-    return this.request('edge-update', {
-      name,
-      code,
-      config: {
-        timeout: 10000,
-        description: `Edge function: ${name}`,
-        ...config
-      }
-    });
+    return this.request('code-read', { name });
   }
 
   /**
-   * Delete an edge function.
+   * Delete a code function.
    */
-  async deleteEdgeFunction(name: string): Promise<{
+  async deleteCodeFunction(name: string): Promise<{
     success: true;
     message: string;
   }> {
-    return this.request('edge-delete', { name });
+    return this.request('code-delete', { name });
   }
 
   /**
-   * Rollback an edge function to a previous version.
+   * Rollback a code function to a previous version.
    */
-  async rollbackEdgeFunction(
+  async rollbackCodeFunction(
     name: string,
     version?: number
   ): Promise<{
@@ -823,16 +809,16 @@ export class Shov {
     version: number;
     message: string;
   }> {
-    return this.request('edge-rollback', {
+    return this.request('code-rollback', {
       name,
       version
     });
   }
 
   /**
-   * Get logs from edge functions.
+   * Get logs from code functions.
    */
-  async getEdgeFunctionLogs(
+  async getCodeFunctionLogs(
     functionName?: string
   ): Promise<{
     success: true;
@@ -845,9 +831,51 @@ export class Shov {
       region?: string;
     }>;
   }> {
-    return this.request('edge-logs', {
+    return this.request('code-logs', {
       functionName
     });
+  }
+
+  /**
+   * Pull all code files from the project.
+   * Returns an object with filenames as keys and code content as values.
+   */
+  async pullCodeFiles(): Promise<{
+    success: true;
+    files: Record<string, {
+      code: string;
+      version: number;
+      deployedAt: string;
+      size: string;
+    }>;
+  }> {
+    // First get list of all code files
+    const list = await this.listCodeFunctions();
+    
+    const files: Record<string, any> = {};
+    
+    // Download each file
+    for (const func of list.functions) {
+      try {
+        const fileContent = await this.readCodeFunction(func.name);
+        files[func.name] = {
+          code: fileContent.code,
+          version: fileContent.version,
+          deployedAt: fileContent.deployedAt,
+          size: fileContent.size
+        };
+      } catch (error) {
+        // Include error information for failed files
+        files[func.name] = {
+          error: error instanceof Error ? error.message : 'Unknown error'
+        };
+      }
+    }
+    
+    return {
+      success: true,
+      files
+    };
   }
 
   // Secrets Management
