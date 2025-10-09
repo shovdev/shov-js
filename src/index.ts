@@ -135,6 +135,47 @@ export class Shov {
   private readonly CACHE_TTL = 5000; // 5 second cache for reads
   private wsClient?: ShovWebSocket; // WebSocket client for persistent connection
 
+  // Namespaced APIs
+  public auth: {
+    sendOtp: (identifier: string) => Promise<{ success: true; message: string }>;
+    verifyOtp: (identifier: string, pin: string) => Promise<{ success: boolean }>;
+  };
+
+  public files: {
+    upload: (file: File) => Promise<{ success: true; id: string; url: string }>;
+    uploadUrl: (fileName: string, mimeType?: string) => Promise<{ uploadUrl: string; fileId: string; publicUrl?: string }>;
+    list: () => Promise<{ success: true; files: Array<{ id: string; filename: string; mime_type: string; size: number; status: string; created_at: string; uploaded_at: string }> }>;
+    forget: (filename: string) => Promise<{ success: true; count: number }>;
+  };
+
+  public code: {
+    write: (name: string, code: string, options?: { description?: string }) => Promise<{ success: true; name: string; url: string; version: number }>;
+    read: (name: string) => Promise<{ success: true; code: string; name: string; deployedAt: string }>;
+    list: () => Promise<{ success: true; functions: Array<{ name: string; url: string; size: string; deployedAt: string; version?: number }> }>;
+    delete: (name: string) => Promise<{ success: true; message: string }>;
+    rollback: (name: string, version?: number) => Promise<{ success: true; message: string; currentVersion: number; rolledBackToVersion: number }>;
+    logs: (name: string, options?: { follow?: boolean; limit?: number }) => Promise<{ success: true; logs: Array<{ timestamp: string; level: string; message: string; metadata?: any }> }>;
+  };
+
+  public secrets: {
+    list: () => Promise<{ success: true; secrets: Array<{ name: string; createdAt: string; updatedAt: string }> }>;
+    set: (name: string, value: string, options?: { functions?: string }) => Promise<{ success: true; message: string }>;
+    setMany: (secrets: Array<{ name: string; value: string }>, options?: { functions?: string }) => Promise<{ success: true; count: number; message: string }>;
+    delete: (name: string, options?: { functions?: string }) => Promise<{ success: true; message: string }>;
+  };
+
+  public streaming: {
+    broadcast: (subscription: { collection?: string; key?: string; channel?: string; filters?: Record<string, any> }, message: any) => Promise<{ success: true; messageId: string; delivered: number }>;
+    subscribe: (subscriptions: Array<{ collection?: string; key?: string; channel?: string; filters?: Record<string, any> }>, options?: { expires_in?: number; onMessage?: (data: any) => void; onError?: (error: any) => void; onOpen?: () => void }) => Promise<{ eventSource: EventSource; token: string; close: () => void }>;
+    token: (subscriptions: Array<{ collection?: string; key?: string; channel?: string; filters?: Record<string, any> }>, options?: { expires_in?: number }) => Promise<{ success: true; token: string; expiresAt: string }>;
+  };
+
+  public events: {
+    track: (eventName: string, properties?: Record<string, any>, options?: { environment?: string }) => Promise<{ success: true; eventId: string }>;
+    query: (options: { event?: string; environment?: string; filters?: Record<string, any>; timeRange?: string; limit?: number }) => Promise<{ success: true; events: Array<any>; total: number }>;
+    tail: (options: { event?: string; limit?: number; follow?: boolean }) => Promise<{ success: true; events: Array<any> }>;
+  };
+
   constructor(config: ShovConfig) {
     if (!config.projectName) {
       throw new ShovError('projectName is required');
@@ -204,6 +245,68 @@ export class Shov {
         this.agent = undefined;
       }
     }
+
+    // Initialize namespaced APIs - these are the ONLY public API methods
+    this.auth = {
+      sendOtp: (identifier: string) => this.request('send-otp', { identifier }),
+      verifyOtp: (identifier: string, pin: string) => this.request('verify-otp', { identifier, pin }),
+    };
+
+    this.files = {
+      upload: this.upload.bind(this),
+      uploadUrl: this.getUploadUrl.bind(this),
+      list: this.listFiles.bind(this),
+      forget: this.forgetFile.bind(this),
+    };
+
+    this.code = {
+      write: (name: string, code: string, config?: { timeout?: number; description?: string }) => 
+        this.request('code-write', { name, code, config: { timeout: 10000, description: `Code function: ${name}`, ...config } }),
+      read: (name: string) => this.request('code-read', { name }),
+      list: () => this.request('code-list', {}),
+      delete: (name: string) => this.request('code-delete', { name }),
+      rollback: (name: string, version?: number) => this.request('code-rollback', { name, version }),
+      logs: (functionName?: string) => this.request('code-logs', { functionName }),
+    };
+
+    this.secrets = {
+      list: () => this.request('secrets-list', {}),
+      set: (name: string, value: string, functions?: string[]) => 
+        this.request('secrets-set', { name, value, functions: functions || [] }),
+      setMany: (secrets: Array<{ name: string; value: string }>, functions?: string[]) => 
+        this.request('secrets-set-many', { secrets, functions: functions || [] }),
+      delete: (name: string, functions?: string[]) => 
+        this.request('secrets-delete', { name, functions: functions || [] }),
+    };
+
+    this.streaming = {
+      broadcast: (subscription: { collection?: string; key?: string; channel?: string; filters?: Record<string, any> }, message: any) =>
+        this.request('broadcast', { subscription, message }),
+      subscribe: async (subscriptions: Array<{ collection?: string; key?: string; channel?: string; filters?: Record<string, any> }>, options?: { expires_in?: number; onMessage?: (data: any) => void; onError?: (error: any) => void; onOpen?: () => void }) => {
+        const tokenResponse = await this.createToken('streaming', subscriptions, { expires_in: options?.expires_in });
+        const subscriptionsParam = encodeURIComponent(JSON.stringify(subscriptions));
+        const url = `${this.config.baseUrl}/api/subscribe/${this.config.projectName}?token=${tokenResponse.token}&subscriptions=${subscriptionsParam}`;
+        const eventSource = new EventSource(url);
+        eventSource.onopen = () => options?.onOpen?.();
+        eventSource.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            options?.onMessage?.(data);
+          } catch (error) {
+            options?.onError?.(error);
+          }
+        };
+        eventSource.onerror = (error) => options?.onError?.(error);
+        return { eventSource, token: tokenResponse.token, close: () => eventSource.close() };
+      },
+      token: this.createStreamToken.bind(this),
+    };
+
+    this.events = {
+      track: this.eventsTrack.bind(this),
+      query: this.eventsQuery.bind(this),
+      tail: this.eventsTail.bind(this),
+    };
   }
 
   // Warm up connections for better performance
@@ -470,6 +573,12 @@ export class Shov {
     return this.request('add-many', { name: collection, items });
   }
 
+  async upsert(collection: string, matchFields: object, data: object, options?: { insertOnly?: boolean }): Promise<{ success: true; id: string; created: boolean; updated: boolean }> {
+    const body: any = { collection, matchFields, data };
+    if (options?.insertOnly) body.insertOnly = options.insertOnly;
+    return this.request('upsert', body);
+  }
+
   async where(collection: string, options?: { filter?: FilterObject; limit?: number; sort?: string }): Promise<{ items: ShovItem[] }> {
     const body: any = { name: collection };
     if (options?.filter) body.filter = options.filter;
@@ -509,12 +618,15 @@ export class Shov {
 
   // Batch Operations
   async batch(operations: Array<{
-    type: 'set' | 'get' | 'add' | 'update' | 'remove' | 'forget' | 'clear';
+    type: 'set' | 'get' | 'add' | 'upsert' | 'update' | 'remove' | 'forget' | 'clear';
     name?: string;
     collection?: string;
     id?: string;
+    matchFields?: object;
+    data?: any;
     value?: any;
     excludeFromVector?: boolean;
+    insertOnly?: boolean;
   }>): Promise<{
     success: true;
     results: Array<{ success: boolean; id?: string; operation: string; error?: string }>;
@@ -632,24 +744,25 @@ export class Shov {
     return this.request('contents', {});
   }
 
-  // Project-scoped Auth Operations
   /**
-   * Sends a one-time password (OTP) to the given identifier (e.g., email) for this project.
+   * @deprecated Use shov.auth.sendOtp() instead. Direct methods are removed in favor of namespaced API.
+   * @throws {Error} Always throws - use namespaced API
    */
-  async sendOtp(identifier: string): Promise<{ success: true; message: string }> {
-    return this.request('send-otp', { identifier });
+  async sendOtp(): Promise<never> {
+    throw new ShovError('sendOtp() is removed. Use shov.auth.sendOtp() instead.');
   }
 
   /**
-   * Verifies a one-time password (OTP) for the given identifier for this project.
+   * @deprecated Use shov.auth.verifyOtp() instead. Direct methods are removed in favor of namespaced API.
+   * @throws {Error} Always throws - use namespaced API
    */
-  async verifyOtp(identifier: string, pin: string): Promise<{ success: boolean }> {
-    return this.request('verify-otp', { identifier, pin });
+  async verifyOtp(): Promise<never> {
+    throw new ShovError('verifyOtp() is removed. Use shov.auth.verifyOtp() instead.');
   }
 
-  // Real-time Streaming Operations
   /**
-   * Broadcast a message to subscribers of a specific subscription.
+   * @deprecated Use shov.streaming.broadcast() instead. Direct methods are removed in favor of namespaced API.
+   * @throws {Error} Always throws - use namespaced API
    */
   async broadcast(
     subscription: {
@@ -664,287 +777,19 @@ export class Shov {
     messageId: string;
     delivered: number;
   }> {
-    return this.request('broadcast', { subscription, message });
+    throw new ShovError('broadcast() is removed. Use shov.streaming.broadcast() instead.');
   }
 
   /**
-   * Subscribe to real-time updates using Server-Sent Events (SSE).
-   * Returns an EventSource instance for handling the stream.
+   * @deprecated Use shov.streaming.subscribe() instead. Direct methods are removed in favor of namespaced API.
+   * @throws {Error} Always throws - use namespaced API
    */
-  async subscribe(
-    subscriptions: Array<{
-      collection?: string;
-      key?: string;
-      channel?: string;
-      filters?: Record<string, any>;
-    }>,
-    options?: { 
-      expires_in?: number;
-      onMessage?: (data: any) => void;
-      onError?: (error: any) => void;
-      onOpen?: () => void;
-    }
-  ): Promise<{
-    eventSource: EventSource;
-    token: string;
-    close: () => void;
-  }> {
-    // First create a streaming token
-    const tokenResponse = await this.createToken('streaming', subscriptions, {
-      expires_in: options?.expires_in
-    });
-
-    // Create EventSource connection
-    const subscriptionsParam = encodeURIComponent(JSON.stringify(subscriptions));
-    const url = `${this.config.baseUrl}/api/subscribe/${this.config.projectName}?token=${tokenResponse.token}&subscriptions=${subscriptionsParam}`;
-    
-    const eventSource = new EventSource(url);
-
-    // Set up event handlers
-    eventSource.onopen = () => {
-      options?.onOpen?.();
-    };
-
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        options?.onMessage?.(data);
-      } catch (error) {
-        options?.onError?.(error);
-      }
-    };
-
-    eventSource.onerror = (error) => {
-      options?.onError?.(error);
-    };
-
-    return {
-      eventSource,
-      token: tokenResponse.token,
-      close: () => {
-        eventSource.close();
-      }
-    };
+  async subscribe(): Promise<never> {
+    throw new ShovError('subscribe() is removed. Use shov.streaming.subscribe() instead.');
   }
 
-  // Code Functions Management
-
-  /**
-   * List all deployed code functions in the project.
-   */
-  async listCodeFunctions(): Promise<{
-    success: true;
-    functions: Array<{
-      name: string;
-      url: string;
-      size: string;
-      deployedAt: string;
-      version?: number;
-    }>;
-  }> {
-    return this.request('code-list', {});
-  }
-
-  /**
-   * Write (create or overwrite) a code function.
-   */
-  async writeCodeFunction(
-    name: string,
-    code: string,
-    config?: {
-      timeout?: number;
-      description?: string;
-    }
-  ): Promise<{
-    success: true;
-    name: string;
-    url: string;
-    deployedAt: string;
-    version: number;
-  }> {
-    return this.request('code-write', {
-      name,
-      code,
-      config: {
-        timeout: 10000,
-        description: `Code function: ${name}`,
-        ...config
-      }
-    });
-  }
-
-  /**
-   * Read the source code of a deployed code function.
-   */
-  async readCodeFunction(name: string): Promise<{
-    success: true;
-    name: string;
-    code: string;
-    version: number;
-    deployedAt: string;
-    size: string;
-  }> {
-    return this.request('code-read', { name });
-  }
-
-  /**
-   * Delete a code function.
-   */
-  async deleteCodeFunction(name: string): Promise<{
-    success: true;
-    message: string;
-  }> {
-    return this.request('code-delete', { name });
-  }
-
-  /**
-   * Rollback a code function to a previous version.
-   */
-  async rollbackCodeFunction(
-    name: string,
-    version?: number
-  ): Promise<{
-    success: true;
-    name: string;
-    version: number;
-    message: string;
-  }> {
-    return this.request('code-rollback', {
-      name,
-      version
-    });
-  }
-
-  /**
-   * Get logs from code functions.
-   */
-  async getCodeFunctionLogs(
-    functionName?: string
-  ): Promise<{
-    success: true;
-    logs: Array<{
-      timestamp: string;
-      function: string;
-      level: string;
-      message: string;
-      duration?: string;
-      region?: string;
-    }>;
-  }> {
-    return this.request('code-logs', {
-      functionName
-    });
-  }
-
-  /**
-   * Pull all code files from the project.
-   * Returns an object with filenames as keys and code content as values.
-   */
-  async pullCodeFiles(): Promise<{
-    success: true;
-    files: Record<string, {
-      code: string;
-      version: number;
-      deployedAt: string;
-      size: string;
-    }>;
-  }> {
-    // First get list of all code files
-    const list = await this.listCodeFunctions();
-    
-    const files: Record<string, any> = {};
-    
-    // Download each file
-    for (const func of list.functions) {
-      try {
-        const fileContent = await this.readCodeFunction(func.name);
-        files[func.name] = {
-          code: fileContent.code,
-          version: fileContent.version,
-          deployedAt: fileContent.deployedAt,
-          size: fileContent.size
-        };
-      } catch (error) {
-        // Include error information for failed files
-        files[func.name] = {
-          error: error instanceof Error ? error.message : 'Unknown error'
-        };
-      }
-    }
-    
-    return {
-      success: true,
-      files
-    };
-  }
-
-  // Secrets Management
-
-  /**
-   * List all secret names (values are never returned for security).
-   */
-  async listSecrets(): Promise<{
-    success: true;
-    secrets: string[];
-  }> {
-    return this.request('secrets-list', {});
-  }
-
-  /**
-   * Set a secret for edge functions.
-   */
-  async setSecret(
-    name: string,
-    value: string,
-    functions?: string[]
-  ): Promise<{
-    success: true;
-    message: string;
-  }> {
-    return this.request('secrets-set', {
-      name,
-      value,
-      functions: functions || []
-    });
-  }
-
-  /**
-   * Set multiple secrets at once (bulk operation).
-   */
-  async setManySecrets(
-    secrets: Array<{ name: string; value: string }>,
-    functions?: string[]
-  ): Promise<{
-    success: true;
-    message: string;
-    results: Array<{
-      function: string;
-      secretsSet: number;
-      totalSecrets: number;
-    }>;
-    secretNames: string[];
-  }> {
-    return this.request('secrets-set-many', {
-      secrets,
-      functions: functions || []
-    });
-  }
-
-  /**
-   * Delete a secret.
-   */
-  async deleteSecret(
-    name: string,
-    functions?: string[]
-  ): Promise<{
-    success: true;
-    message: string;
-  }> {
-    return this.request('secrets-delete', {
-      name,
-      functions: functions || []
-    });
-  }
+  // All code functions, secrets, and streaming methods have been moved to namespaces
+  // Use shov.code.*, shov.secrets.*, and shov.streaming.* instead
 
   // ============================================================================
   // BLOCKS MANAGEMENT
