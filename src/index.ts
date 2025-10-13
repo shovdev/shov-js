@@ -1,7 +1,7 @@
 /**
  * Shov JavaScript SDK
  *
- * @version 2.0.0
+ * @version 2.6.0
  * @license MIT
  * @see https://shov.com/
  */
@@ -148,6 +148,33 @@ export class Shov {
     forget: (filename: string) => Promise<{ success: true; count: number }>;
   };
 
+  public email: {
+    send: (options: {
+      to: string | string[];
+      subject: string;
+      body: string;
+      from?: string;
+      replyTo?: string;
+      cc?: string | string[];
+      bcc?: string | string[];
+      html?: string;
+    }) => Promise<{ success: true; messageId: string }>;
+    sendTemplate: (options: {
+      to: string | string[];
+      templateId: string;
+      variables?: Record<string, any>;
+      from?: string;
+      replyTo?: string;
+    }) => Promise<{ success: true; messageId: string }>;
+    sendBatch: (messages: Array<{
+      to: string;
+      subject: string;
+      body: string;
+      from?: string;
+      html?: string;
+    }>) => Promise<{ success: true; sent: number; failed: number; results: Array<{ to: string; messageId?: string; error?: string }> }>;
+  };
+
   public code: {
     write: (name: string, code: string, options?: { description?: string }) => Promise<{ success: true; name: string; url: string; version: number }>;
     read: (name: string) => Promise<{ success: true; code: string; name: string; deployedAt: string }>;
@@ -257,6 +284,12 @@ export class Shov {
       uploadUrl: this.getUploadUrl.bind(this),
       list: this.listFiles.bind(this),
       forget: this.forgetFile.bind(this),
+    };
+
+    this.email = {
+      send: this.emailSend.bind(this),
+      sendTemplate: this.emailSendTemplate.bind(this),
+      sendBatch: this.emailSendBatch.bind(this),
     };
 
     this.code = {
@@ -951,6 +984,77 @@ export class Shov {
   }
 
   /**
+   * Send an email
+   * @param options - Email options
+   * @returns Promise with message ID
+   */
+  async emailSend(options: {
+    to: string | string[];
+    subject: string;
+    body: string;
+    from?: string;
+    replyTo?: string;
+    cc?: string | string[];
+    bcc?: string | string[];
+    html?: string;
+  }): Promise<{ success: true; messageId: string }> {
+    return this.request('email-send', {
+      to: Array.isArray(options.to) ? options.to : [options.to],
+      subject: options.subject,
+      body: options.body,
+      from: options.from,
+      replyTo: options.replyTo,
+      cc: options.cc ? (Array.isArray(options.cc) ? options.cc : [options.cc]) : undefined,
+      bcc: options.bcc ? (Array.isArray(options.bcc) ? options.bcc : [options.bcc]) : undefined,
+      html: options.html,
+    }, 'POST');
+  }
+
+  /**
+   * Send an email using a template
+   * @param options - Template email options
+   * @returns Promise with message ID
+   */
+  async emailSendTemplate(options: {
+    to: string | string[];
+    templateId: string;
+    variables?: Record<string, any>;
+    from?: string;
+    replyTo?: string;
+  }): Promise<{ success: true; messageId: string }> {
+    return this.request('email-send-template', {
+      to: Array.isArray(options.to) ? options.to : [options.to],
+      templateId: options.templateId,
+      variables: options.variables || {},
+      from: options.from,
+      replyTo: options.replyTo,
+    }, 'POST');
+  }
+
+  /**
+   * Send multiple emails in a batch
+   * @param messages - Array of email messages
+   * @returns Promise with batch results
+   */
+  async emailSendBatch(messages: Array<{
+    to: string;
+    subject: string;
+    body: string;
+    from?: string;
+    html?: string;
+  }>): Promise<{ success: true; sent: number; failed: number; results: Array<{ to: string; messageId?: string; error?: string }> }> {
+    return this.request('email-send-batch', {
+      messages: messages.map(msg => ({
+        to: [msg.to],
+        subject: msg.subject,
+        body: msg.body,
+        from: msg.from,
+        html: msg.html,
+      })),
+    }, 'POST');
+  }
+
+  /**
    * Query historical events
    * @param options - Query options including filters, time range, and limit
    * @returns Promise with array of events and metadata
@@ -1029,34 +1133,8 @@ export class Shov {
     return response.json();
   }
 
-  /**
-   * Convenience namespace for events API
-   */
-  events = {
-    /**
-     * Track a custom event
-     */
-    track: (eventName: string, properties: Record<string, any> = {}, options: { environment?: string } = {}) => 
-      this.eventsTrack(eventName, properties, options),
-    
-    /**
-     * Query historical events
-     */
-    query: (options: {
-      filters?: Record<string, any>;
-      timeRange?: '1h' | '6h' | '12h' | '24h' | '7d' | '30d';
-      limit?: number;
-      eventName?: string;
-      environment?: string;
-    } = {}) => this.eventsQuery(options),
-    
-    /**
-     * Tail recent events
-     */
-    tail: (options: { event?: string; limit?: number } = {}) => 
-      this.eventsTail(options)
-  };
 }
+
 
 export function createShov(config: ShovConfig): Shov {
   return new Shov(config);
