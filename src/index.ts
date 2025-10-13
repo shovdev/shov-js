@@ -1,7 +1,7 @@
 /**
  * Shov JavaScript SDK
  *
- * @version 2.6.0
+ * @version 2.8.0
  * @license MIT
  * @see https://shov.com/
  */
@@ -145,6 +145,8 @@ export class Shov {
     upload: (file: File) => Promise<{ success: true; id: string; url: string }>;
     uploadUrl: (fileName: string, mimeType?: string) => Promise<{ uploadUrl: string; fileId: string; publicUrl?: string }>;
     list: () => Promise<{ success: true; files: Array<{ id: string; filename: string; mime_type: string; size: number; status: string; created_at: string; uploaded_at: string }> }>;
+    get: (fileId: string) => Promise<{ success: true; file: { id: string; filename: string; url: string; size: number; mime_type: string; created_at: string; uploaded_at: string } }>;
+    delete: (fileId: string) => Promise<{ success: true; message: string }>;
     forget: (filename: string) => Promise<{ success: true; count: number }>;
   };
 
@@ -173,6 +175,35 @@ export class Shov {
       from?: string;
       html?: string;
     }>) => Promise<{ success: true; sent: number; failed: number; results: Array<{ to: string; messageId?: string; error?: string }> }>;
+  };
+
+  public slack: {
+    send: (options: {
+      text: string;
+      channel?: string;
+      webhookUrl?: string;
+      blocks?: any[];
+      threadTs?: string;
+      username?: string;
+      iconEmoji?: string;
+    }) => Promise<{ success: true; ts: string; channel: string }>;
+    sendDirect: (options: {
+      user: string;
+      text: string;
+      blocks?: any[];
+    }) => Promise<{ success: true; ts: string; channel: string }>;
+    sendWithActions: (options: {
+      text: string;
+      channel?: string;
+      webhookUrl?: string;
+      actions: Array<{
+        text: string;
+        id: string;
+        value?: string;
+        url?: string;
+        style?: 'primary' | 'danger';
+      }>;
+    }) => Promise<{ success: true; ts: string; channel: string }>;
   };
 
   public code: {
@@ -283,6 +314,8 @@ export class Shov {
       upload: this.upload.bind(this),
       uploadUrl: this.getUploadUrl.bind(this),
       list: this.listFiles.bind(this),
+      get: this.getFile.bind(this),
+      delete: this.deleteFile.bind(this),
       forget: this.forgetFile.bind(this),
     };
 
@@ -290,6 +323,12 @@ export class Shov {
       send: this.emailSend.bind(this),
       sendTemplate: this.emailSendTemplate.bind(this),
       sendBatch: this.emailSendBatch.bind(this),
+    };
+
+    this.slack = {
+      send: this.slackSend.bind(this),
+      sendDirect: this.slackSendDirect.bind(this),
+      sendWithActions: this.slackSendWithActions.bind(this),
     };
 
     this.code = {
@@ -693,6 +732,24 @@ export class Shov {
     return this.request('files-list', {});
   }
 
+  /**
+   * Get file metadata by ID
+   * @param fileId - File ID to retrieve
+   * @returns Promise with file metadata
+   */
+  async getFile(fileId: string): Promise<{ success: true; file: { id: string; filename: string; url: string; size: number; mime_type: string; created_at: string; uploaded_at: string } }> {
+    return this.request('files-get', { fileId });
+  }
+
+  /**
+   * Delete a file by ID
+   * @param fileId - File ID to delete
+   * @returns Promise with success message
+   */
+  async deleteFile(fileId: string): Promise<{ success: true; message: string }> {
+    return this.request('files-delete', { fileId });
+  }
+
   // File Operations
   async getUploadUrl(fileName: string, mimeType?: string): Promise<{ uploadUrl: string; fileId: string; publicUrl?: string }> {
     const body: any = { fileName };
@@ -1051,6 +1108,73 @@ export class Shov {
         from: msg.from,
         html: msg.html,
       })),
+    }, 'POST');
+  }
+
+  /**
+   * Send a Slack message
+   * @param options - Slack message options
+   * @returns Promise with message timestamp and channel
+   */
+  async slackSend(options: {
+    text: string;
+    channel?: string;
+    webhookUrl?: string;
+    blocks?: any[];
+    threadTs?: string;
+    username?: string;
+    iconEmoji?: string;
+  }): Promise<{ success: true; ts: string; channel: string }> {
+    return this.request('slack-send', {
+      text: options.text,
+      channel: options.channel,
+      webhookUrl: options.webhookUrl,
+      blocks: options.blocks,
+      thread_ts: options.threadTs,
+      username: options.username,
+      icon_emoji: options.iconEmoji,
+    }, 'POST');
+  }
+
+  /**
+   * Send a direct message on Slack
+   * @param options - Direct message options
+   * @returns Promise with message timestamp and channel
+   */
+  async slackSendDirect(options: {
+    user: string;
+    text: string;
+    blocks?: any[];
+  }): Promise<{ success: true; ts: string; channel: string }> {
+    return this.request('slack-send-direct', {
+      user: options.user,
+      text: options.text,
+      blocks: options.blocks,
+    }, 'POST');
+  }
+
+  /**
+   * Send a Slack message with interactive actions
+   * @param options - Message with actions options
+   * @returns Promise with message timestamp and channel
+   */
+  async slackSendWithActions(options: {
+    text: string;
+    channel?: string;
+    webhookUrl?: string;
+    actions: Array<{
+      text: string;
+      id: string;
+      value?: string;
+      url?: string;
+      style?: 'primary' | 'danger';
+    }>;
+  }): Promise<{ success: true; ts: string; channel: string }> {
+    return this.request('slack-send-with-actions', {
+      text: options.text,
+      channel: options.channel,
+      webhookUrl: options.webhookUrl,
+      actions: options.actions,
     }, 'POST');
   }
 
