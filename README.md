@@ -1,6 +1,6 @@
 # Shov JavaScript SDK
 
-JavaScript/TypeScript SDK for Shov - Ship Production Backends in Seconds, Not Weeks with vector search, edge functions, and real-time streaming.
+JavaScript/TypeScript SDK for Shov - Ship Production Backends in Seconds, Not Weeks. Full-stack deployment with unified data engine, edge functions, and real-time streaming.
 
 <p align="center">
   <a href="https://shov.com" target="_blank"><strong>Website / Docs</strong></a> •
@@ -46,12 +46,6 @@ const adults = await shov.where('users', {
 const totalUsers = await shov.count('users')
 const adminCount = await shov.count('users', { filter: { role: 'admin' } })
 
-// Vector search with advanced filters
-const results = await shov.search('find Alice', { 
-  collection: 'users',
-  filters: { role: 'admin', age: { $between: [20, 35] } }
-})
-
 // Real-time streaming
 const { eventSource, close } = await shov.subscribe([
   { collection: 'users' },
@@ -91,7 +85,6 @@ Shov delivers exceptional performance from 300+ global edge locations:
 - **Cached Reads**: ~4ms globally (19x faster than Supabase, 10x faster than MongoDB)
 - **Complex Queries**: ~8ms per operation (8.7x faster than Supabase, 5.6x faster than MongoDB)  
 - **Code Functions**: ~68ms globally (hot cached functions + data)
-- **Vector Search**: ~100ms globally with automatic embeddings
 - **Real-time Streaming**: <100ms message delivery to active subscribers
 
 ## API Reference
@@ -250,49 +243,8 @@ console.log(result.results) // Array of individual operation results
 
 **⚠️ Important**: All operations in a batch are executed atomically. If any operation fails, the entire batch is rolled back and no changes are made.
 
-#### `search(query, options)`
-Perform vector search across your data.
-
-```javascript
-// Search within a specific collection
-const results = await shov.search('stringed instrument', { 
-  collection: 'products' 
-})
-
-// Search with filters and options
-const filteredResults = await shov.search('electronics', {
-  collection: 'products',
-  filters: { category: 'guitar', price: { $lt: 1000 } },
-  topK: 5,
-  minScore: 0.7
-})
-
-// Search across all collections in project
-const allResults = await shov.search('musical equipment')
-```
-
-**⚠️ Important**: Vector search has eventual consistency. There is a small delay between adding data (`add`, `set`) and it becoming searchable. Plan your application logic to account for this indexing lag.
-
-```javascript
-// Example: Handle eventual consistency
-const newItem = await shov.add('products', { name: 'New Guitar', type: 'Electric' })
-
-// ❌ This may not find the new item immediately
-const results = await shov.search('New Guitar') // May return empty
-
-// ✅ Better: Use direct queries for immediate access
-const items = await shov.where('products', { filter: { id: newItem.id } }) // Always works immediately
-
-// ✅ Or implement retry logic for search
-async function searchWithRetry(query, maxRetries = 3) {
-  for (let i = 0; i < maxRetries; i++) {
-    const results = await shov.search(query)
-    if (results.length > 0) return results
-    await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1s
-  }
-  return []
-}
-```
+#### `search(query, options)` - REMOVED FOR V1
+Vector search has been temporarily removed for v1 launch. Use `where()` with filters for data queries. This feature will return in a future release.
 
 ### File Operations
 
